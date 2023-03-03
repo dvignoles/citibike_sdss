@@ -3,6 +3,40 @@ citibike_sdss
 
 A spatial decision support system (SDSS) for NYC Citi Bike dock placement & expansion
 
+
+## Getting started
+
+python3 in a linux environment is required. Using conda is suggested, but venv should work as well. 
+
+See `./Makefile` for details about what each command does. 
+
+```
+# create python environemtn
+make create_environment
+
+#If using conda
+conda activate citibike_sdss
+
+#If not using conda
+source env/bin/activate
+
+# install python dependencies
+make requirements
+
+# configure aws access
+aws configure
+
+# <enter acess key>
+# <enter secret key>
+# accept defaults
+
+# download from aws s3 to ./data
+make sync_data_from_s3
+
+# if desired, upload data to s3
+make sync_data_to_s3
+```
+
 Project Organization
 ------------
 
