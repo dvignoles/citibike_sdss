@@ -9,7 +9,7 @@ A spatial decision support system (SDSS) for NYC Citi Bike dock placement & expa
 python3 in a linux environment is required. Using conda is suggested, but venv should work as well. 
 
 See `./Makefile` for details about what each command does. 
-
+   
 ```
 # create python environemtn
 make create_environment
