@@ -41,6 +41,10 @@ def gdf_dict_to_gpkg(gdf_dict, path):
 # Produce a GeoPackage from a dict of URLs
 # Return the dict of GeoDataFrames produced during processing
 def urls_to_gpkg(url_dict, path, max_size=500000):
+    print("Creating dict of GeoDataFrames...")
     my_gdf_dict = gdf_dict(url_dict, max_size)
+    print("GeoDataFrame dict complete.")
+    print("Writing to GeoPackage...")
     gdf_dict_to_gpkg(my_gdf_dict, path)
+    print(f"GeoPackage written to {path}.")
     return my_gdf_dict
