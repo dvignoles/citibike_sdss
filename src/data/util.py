@@ -2,6 +2,7 @@ import geopandas as gp
 import requests
 import warnings
 
+
 # Get GeoJSON from URL
 def json_response(url, limit=500000):
     """Returns JSON response for the url with the specified limit parameter."""
