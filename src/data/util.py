@@ -1,6 +1,7 @@
 import geopandas as gp
 import requests
 import warnings
+import gzip
 
 
 # Get GeoJSON from URL
@@ -9,6 +10,34 @@ def json_response(url, limit=500000):
     my_params = {"$limit": limit}
     with requests.get(url, params=my_params) as response:
         return response.json()
+
+
+def download_file(url, local_filename=None, chunk_size=8192, compress=False):
+    """Download file from web to disk
+
+    Arguments:
+    url - web url of file
+    local_filename - file name/path to download to
+    chunk_size - size of chunks to stream download in. Useful for large files
+    compress - gzip compress file
+    """
+    if local_filename is None:
+        local_filename = url.split("/")[-1]
+        if compress:
+            local_filename += ".gz"
+
+    if compress:
+        assert str(local_filename).endswith(
+            ".gz"
+        ), "compressed file must have .gz extension"
+
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        f = gzip.open(local_filename, "wb") if compress else open(local_filename, "wb")
+        for chunk in r.iter_content(chunk_size=chunk_size):
+            f.write(chunk)
+        f.close()
+        return local_filename
 
 
 # Create GeoDataFrame from URL
@@ -75,11 +104,10 @@ def urls_to_gpkg(url_dict, path, max_size=500000):
     that the user will use to refer to the data from the URL.
     path - The path to which the GeoPackage will be written.
 
-    Returns: 
+    Returns:
     gdf_dict - A dict of the form {name : GeoDataFrame}, where the
     urls from url_dict are replaced with the corresponding
-    GeoDataFrames.
-"""
+    GeoDataFrames."""
     print("Creating dict of GeoDataFrames...")
     my_gdf_dict = gdf_dict(url_dict, max_size)
     print("GeoDataFrame dict complete.")

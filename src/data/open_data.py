@@ -6,7 +6,10 @@ open_data_urls = (
     ("census", "https://data.cityofnewyork.us/resource/63ge-mke6.geojson"),
     ("bike_routes", "https://data.cityofnewyork.us/resource/s5uu-3ajy.geojson"),
     ("street_centerline", "https://data.cityofnewyork.us/resource/8rma-cm9c.geojson"),
-    ("vision_zero", "https://data.cityofnewyork.us/resource/h9gi-nx95.geojson"),
+    (
+        "motor_vehicle_collision_crashes",
+        "https://data.cityofnewyork.us/resource/h9gi-nx95.geojson",
+    ),
 )
 
 
@@ -33,7 +36,9 @@ def open_data_to_gpkg(urls=open_data_urls, path="citibike_data.gpkg", limit=1000
 
 
 @click.command()
-@click.option("--url", "-u", "urls", type=(str, str), multiple=True, default=open_data_urls)
+@click.option(
+    "--url", "-u", "urls", type=(str, str), multiple=True, default=open_data_urls
+)
 @click.option("--limit", "-l", "limit", type=int, default=1000000)
 @click.option("--path", "-p", "path", type=str, default="citibike_data.gpkg")
 def main(urls, path, limit):
