@@ -3,6 +3,88 @@ import requests
 import warnings
 import gzip
 
+# Classes for handling sources
+class Source:
+    """Holds information about a web-based data source.
+
+    Attributes:
+    name: the user-defined name of the source
+    data_url: the URL from which the data will be downloaded
+    info_url: the URL to a page providing information about the dataset
+    description: the user-defined description of the source
+    """
+
+    def __init__(self, name: str, data_url: str, info_url: str, description: str):
+        """"""
+        self.name = name
+        self.data_url = data_url
+        self.info_url = info_url
+        self.description = description
+
+
+class SourceDict:
+    """Holds a dict of Source objects.
+
+    Attributes:
+    sources: dict of Source objects of the form {name: Source}
+    """
+
+    sources = {}
+
+    def __init__(self, sources=None):
+        """"""
+        if type(sources) == list:
+            for source in sources:
+                self.add(source)
+        elif type(sources) == Source:
+            self.add(sources)
+        elif sources is None:
+            self.sources = {}
+        else:
+            raise TypeError
+
+    def add(self, source):
+        """Add a Source to the SourceDict.
+
+        Arguments:
+        source (Source): The Source object to be added.
+        """
+
+        if type(source) == Source:
+            self.sources[source.name] = source
+        else:
+            raise TypeError
+
+    def remove(self, source):
+        """Remove a Source from the SourceList.
+
+        Arguments:
+        source (Source or str): The Source object to be removed; can also be specified by a str corresponding to the Source's name.
+        """
+        if type(source) == str:
+            self.sources.pop(source)
+        elif type(source) == Source:
+            self.sources.pop(source.name)
+
+    def names(self):
+        """Returns a list of the names of the sources in the SourceDict."""
+        return [source for source in self.sources]
+
+    def url_dict(self):
+        """Returns a dict of the form {name : data_url} for the SourceDict."""
+        return {source: self[source].data_url for source in self.sources}
+
+    def url_tuples(self):
+        """Returns the dict produced by url_dict as a tuple of tuples.
+
+        Included to facilitate command-line processing (see open_data.py)
+        """
+        return tuple(map(tuple, self.url_dict().items()))
+    
+    def __getitem__(self, name):
+        """Returns the item in SourcesDict.sources corresponding to name."""
+        return self.sources[name]
+
 
 # Get GeoJSON from URL
 def json_response(url, limit=500000):
