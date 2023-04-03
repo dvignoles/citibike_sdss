@@ -8,20 +8,16 @@ import open_data
 import gbfs
 
 
-def make_open_data(project_dir, logger=None):
-
-    if logger is not None:
-        logger.info("downloading NYC Open Data")
+def make_open_data(project_dir, logger):
+    logger.info("downloading NYC Open Data")
 
     open_data.open_data_to_gpkg(
         path=project_dir.joinpath("data/raw/opendata.gpkg"), limit=2000000
     )
 
 
-def make_gbfs_stations(project_dir, logger=None):
-
-    if logger is not None:
-        logger.info("downloading Citi Bike GBFS Station Information")
+def make_gbfs_stations(project_dir, logger):
+    logger.info("downloading Citi Bike GBFS Station Information")
 
     stations = gbfs.Stations()
     stations._download_raw(
@@ -30,9 +26,19 @@ def make_gbfs_stations(project_dir, logger=None):
     stations.process(output_file=project_dir.joinpath("data/processed/gbfs.gpkg"))
 
 
-def make_all(project_dir, logger=None):
-    make_open_data(project_dir, logger=logger)
-    make_gbfs_stations(project_dir, logger=logger)
+def make_gbfs_status(project_dir, logger):
+    logger.info("downloading Citi Bike GBFS Station Information")
+
+    output_file = project_dir.joinpath("data/processed/gbfs.gpkg")
+    raw_dir = project_dir.joinpath("data/raw/station_status")
+    status = gbfs.StationStatus(output_file, raw_dir)
+    count = status.process()
+    logger.info(f"{count} GBFS captures processed")
+
+
+def make_all(project_dir, logger):
+    make_open_data(project_dir, logger)
+    make_gbfs_stations(project_dir, logger)
 
 
 @click.group()
@@ -55,6 +61,12 @@ def get_opendata(ctx):
 @click.pass_context
 def get_stations(ctx):
     make_gbfs_stations(ctx.obj['project_dir'], logger=ctx.obj['logger'])
+
+
+@cli.command(help='Get GBFS Station Status')
+@click.pass_context
+def get_status(ctx):
+    make_gbfs_status(ctx.obj['project_dir'], logger=ctx.obj['logger'])
 
 
 @cli.command(help='Get all datasets')
