@@ -14,19 +14,24 @@ class Source:
     description: the user-defined description of the source
     """
 
-    def __init__(self, name: str, data_url: str, info_url: str, description: str):
+    def __init__(self, name: str, data_url: str, info_url: str, description: str, api_key=None, api_key_date=None):
         """"""
         self.name = name
         self.data_url = data_url
         self.info_url = info_url
         self.description = description
 
+        if api_key is not None:
+            self.api_key = api_key
+
+        if api_key_date is not None:
+            self.api_key_date = api_key_date
 
 class SourceDict:
     """Holds a dict of Source objects.
 
     Attributes:
-    sources: dict of Source objects of the form {name: Source}
+    sources: dict of Source objects of the form {"name": Source}
     """
 
     sources = {}
@@ -74,13 +79,6 @@ class SourceDict:
         """Returns a dict of the form {name : data_url} for the SourceDict."""
         return {source: self[source].data_url for source in self.sources}
 
-    def url_tuples(self):
-        """Returns the dict produced by url_dict as a tuple of tuples.
-
-        Included to facilitate command-line processing (see open_data.py)
-        """
-        return tuple(map(tuple, self.url_dict().items()))
-    
     def __getitem__(self, name):
         """Returns the item in SourcesDict.sources corresponding to name."""
         return self.sources[name]
@@ -131,9 +129,13 @@ def gdf_from_url(url, limit=500000):
     limit - The limit parameter for the request, indicating how many records will be requested.
 
     Returns:
-    gdf - A GeoDataFrame with the data from url."""
+    gdf - A GeoDataFrame with the data from url.
+    """
+    print(f"Downloading data from {url}...")
     response = json_response(url, limit)
+    print("Creating GeoDataFrame...")
     gdf = gp.GeoDataFrame.from_features(response)
+    print("GeoDataFrame complete.\n")
     return gdf
 
 
@@ -154,11 +156,11 @@ def gdf_dict(url_dict, limit=500000):
     """
     ans = {}
     for key in url_dict:
+        print(f"Requesting data for {key} layer...")
         ans[key] = gdf_from_url(url_dict[key], limit)
 
-        # Warn the user if the GeoDataFrame reached the size limit, as
-        # this probably means that the full dataset was not
-        # downloaded.
+        # Warn the user if the GeoDataFrame reached the size limit;
+        # this probably means that the full dataset was not downloaded.
         if len(ans[key]) == limit:
             limit_warning = f"JSON response limit size reached for {key} GeoDataFrame. Increase the limit to ensure the full dataset is downloaded."
             warnings.warn(limit_warning)
@@ -172,8 +174,11 @@ def gdf_dict_to_gpkg(gdf_dict, path):
     Arguments:
     gdf_dict - a dict of GDFs in the format returned by gdf_dict().
     path - the path to which the GeoPackage will be written."""
+    print("Creating GeoPackage...")
     for key in gdf_dict:
+        print(f"Writing {key} layer...")
         gdf_dict[key].to_file(path, layer=key, driver="GPKG")
+    print(f"GeoPackage written to {path}.")
 
 
 # Produce a GeoPackage from a dict of URLs
