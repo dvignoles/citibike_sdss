@@ -1,4 +1,5 @@
 import geopandas as gp
+import cenpy
 import requests
 import warnings
 import gzip
@@ -9,23 +10,78 @@ class Source:
 
     Attributes:
     name: the user-defined name of the source
-    data_url: the URL from which the data will be downloaded
-    info_url: the URL to a page providing information about the dataset
     description: the user-defined description of the source
+
     """
 
-    def __init__(self, name: str, data_url: str, info_url: str, description: str, api_key=None, api_key_date=None):
+    def __init__(self, name: str, description: str, epsg: int):
         """"""
         self.name = name
+        self.description = description
+        self.epsg = epsg
+
+
+class OpenDataSource(Source):
+    """Holds information about a source from NYC Open Data.
+
+    Can also be used for generic API requests that return
+    FeatureCollections.
+
+    Attributes:
+    data_url: the URL from which the data will be downloaded
+    info_url: the URL to a page providing information about the dataset
+    size: the expected maximum size of the dataset (in rows); sets the limit of the API request
+    to_clip: marks a source as in need of clipping
+    """
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        data_url: str,
+        info_url: str,
+        epsg: int,
+        size=1000000,
+        to_clip=False,
+    ):
         self.data_url = data_url
         self.info_url = info_url
-        self.description = description
+        self.size = size
+        super().__init__(name=name, description=description, epsg=epsg)
 
-        if api_key is not None:
-            self.api_key = api_key
+    def get(self):
+        gdf = gdf_from_url(url=self.data_url, limit=self.size)
+        return gdf
 
-        if api_key_date is not None:
-            self.api_key_date = api_key_date        
+
+class CensusSource(Source):
+    """Holds information about a source from the 2019 American Community Survey.
+
+    Attributes:
+    place: Representation of place (e.g. "New York, NY") to pass to cenpy query
+    variables: List of census variable names to pass to cenpy query
+    """
+
+    def __init__(
+        self, name: str, description: str, epsg: int, place: str, variables: list
+    ):
+        self.place = place
+        self.variables = variables
+        super().__init__(name=name, description=description, epsg=epsg)
+
+    def get(self):
+        """Use cenpy to request American Community Census data."""
+        # Set source to ACS 2019 5-year estimates
+        acs = cenpy.products.ACS(2019)
+        # Download data for place name (clipping likely necessary)
+        gdf = acs.from_place(
+            place=self.place,
+            level="tract",
+            variables=self.variables,
+            strict_within=False,
+        )
+        return gdf
+
 
 class SourceDict:
     """Holds a dict of Source objects.
@@ -41,7 +97,7 @@ class SourceDict:
         if type(sources) == list:
             for source in sources:
                 self.add(source)
-        elif type(sources) == Source:
+        elif type(sources) in Source.__subclasses__():
             self.add(sources)
         elif sources is None:
             self.sources = {}
@@ -55,7 +111,7 @@ class SourceDict:
         source (Source): The Source object to be added.
         """
 
-        if type(source) == Source:
+        if type(source) in Source.__subclasses__():
             self.sources[source.name] = source
         else:
             raise TypeError
@@ -68,8 +124,10 @@ class SourceDict:
         """
         if type(source) == str:
             self.sources.pop(source)
-        elif type(source) == Source:
+        elif type(source) in Source.__subclasses():
             self.sources.pop(source.name)
+        else:
+            raise TypeError
 
     def names(self):
         """Returns a list of the names of the sources in the SourceDict."""
@@ -79,9 +137,56 @@ class SourceDict:
         """Returns a dict of the form {name : data_url} for the SourceDict."""
         return {source: self[source].data_url for source in self.sources}
 
+    def get(self):
+        data_dict = DataDict(self)
+        return data_dict
+
     def __getitem__(self, name):
-        """Returns the item in SourcesDict.sources corresponding to name."""
+        """Returns the item in self.sources corresponding to name."""
         return self.sources[name]
+
+
+class DataDict:
+    """Holds a dict of GeoDataFrames produced by a SourceDict.
+
+    attributes:
+    data: dict of the form {name : GeoDataFrame}
+    source_dict: associated SourceDict object
+    """
+
+    def __init__(self, source_dict):
+        """Downloads data and creates dataframe for each Source in self.sources"""
+        self.data = {}
+        self.source_dict = source_dict
+        for name in self.source_dict.sources:
+            self.data[name] = self.source_dict[name].get()
+
+    def __getitem__(self, name):
+        """Returns the GeoDataFrame in self.data corresponding to name."""
+        return self.data[name]
+
+    def set_crs(self):
+        """Sets the CRS of each GeoDataFrame in self.data by associated Sources."""
+        for name in self.source_dict.sources:
+
+            source = self.source_dict[name]
+            gdf = self.data[name]
+            epsg = source.epsg
+
+            if gdf.crs is None:
+                gdf.set_crs(epsg, inplace=True)
+            elif gdf.crs.to_epsg() != epsg:
+                gdf.set_crs(epsg, inplace=True)
+                raise UserWarning(
+                    f"Expected EPSG {epsg} is different from actual EPSG {source.epsg} of {name} layer."
+                )
+
+    def to_crs(self, epsg: int):
+        for name in self.source_dict.sources:
+            self.data[name].to_crs(epsg=epsg, inplace=True)
+
+    def to_file(self, path):
+        gdf_dict_to_gpkg(self.data, path)
 
 
 # Get GeoJSON from URL
@@ -131,6 +236,7 @@ def gdf_from_url(url, limit=500000):
     Returns:
     gdf - A GeoDataFrame with the data from url.
     """
+
     print(f"Downloading data from {url}...")
     response = json_response(url, limit)
     print("Creating GeoDataFrame...")
@@ -202,3 +308,4 @@ def urls_to_gpkg(url_dict, path, max_size=500000):
     gdf_dict_to_gpkg(my_gdf_dict, path)
     print(f"GeoPackage written to {path}.")
     return my_gdf_dict
+

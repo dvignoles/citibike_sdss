@@ -3,7 +3,6 @@ import logging
 import click
 from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
-
 import open_data
 import gbfs
 
@@ -13,9 +12,19 @@ def make_open_data(project_dir, logger=None):
     if logger is not None:
         logger.info("downloading NYC Open Data")
 
-    open_data.open_data_to_gpkg(
-        path=project_dir.joinpath("data/raw/opendata.gpkg"), limit=2000000
-    )
+    # Create util.SourceDict of open data sources
+    open_sources = open_data.open_data_sources()
+
+    # Download data from util.SourceDict into util.DataDict
+    open_data_dict = open_sources.get()
+
+    # Project, filter, and clean data
+    open_data_dict.set_crs()
+    open_data_dict.to_crs(2263)
+    open_data.clean_open_data(open_data_dict)
+
+    # Write open_data to GeoPackage
+    open_data_dict.to_file(project_dir.joinpath("data/processed/open_data.gpkg"))
 
 
 def make_gbfs_stations(project_dir, logger=None):

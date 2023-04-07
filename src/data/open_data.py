@@ -2,50 +2,86 @@ import util
 import geopandas as gp
 import pandas as pd
 import os
+import importlib
+
+
+# Define sources (doing so separately from open_data_sources() allows
+# flexibility in which sources to include) 
+census_tracts_geom = util.OpenDataSource(
+    name="census_geom",
+    data_url="https://data.cityofnewyork.us/resource/i69b-3rdj.geojson",
+    info_url="https://data.cityofnewyork.us/City-Government/2010-Census-Tracts/fxpq-c8ku",
+    description="2010 Census Tracts from the US Census for NYC.",
+    epsg=4326,
+)
+
+census_acs_pop = util.CensusSource(
+    name="acs_population",
+    description="Total population five-year estimates from ACS 2019.",
+    place="New York, NY",
+    variables=["B01003_001E"],
+    epsg=3857,
+)
+
+subways = util.OpenDataSource(
+    name="subway_stations",
+    description="Point layer of all subway stations in NYC.",
+    data_url="https://data.cityofnewyork.us/resource/kk4q-3rt2.geojson",
+    info_url="https://data.cityofnewyork.us/Transportation/Subway-Stations/arq3-7z49",
+    epsg=4326,
+)
+
+census_nta = util.OpenDataSource(
+    name="census_nta",
+    description="Aggregated population for NYC Neighborhood Tabulation Areas.",
+    data_url="https://data.cityofnewyork.us/resource/rnsn-acs2.geojson",
+    info_url="https://data.cityofnewyork.us/City-Government/Census-Demographics-at-the-Neighborhood-Tabulation/rnsn-acs2",
+    epsg=4326
+    )
+
+# Bike routes
+bike_routes = util.OpenDataSource(
+    name="bike_routes",
+    data_url="https://data.cityofnewyork.us/resource/s5uu-3ajy.geojson",
+    info_url="https://data.cityofnewyork.us/Transportation/New-York-City-Bike-Routes/7vsa-caz7",
+    description="Locations of bike lanes and routes throughout NYC.",
+    epsg=4326,
+)
+
+# Streets
+streets = util.OpenDataSource(
+    name="streets",
+    data_url="https://data.cityofnewyork.us/resource/8rma-cm9c.geojson",
+    info_url="https://data.cityofnewyork.us/City-Government/NYC-Street-Centerline-CSCL-/exjm-f27b",
+    description="Road-bed representation of New York City streets.",
+    epsg=4326,
+)
+
+# Borough boundaries
+boroughs = util.OpenDataSource(
+    name="boroughs",
+    data_url="https://data.cityofnewyork.us/resource/7t3b-ywvw.geojson",
+    info_url="https://data.cityofnewyork.us/City-Government/Borough-Boundaries/tqmj-j8zm",
+    description="Boundaries of NYC boroughs, water areas excluded.",
+    epsg=4326,
+)
+
+# Motor vehicle crashes and collisions
+motor_vehicle_crashes = util.OpenDataSource(
+    name="motor_vehicle_crashes",
+    data_url="https://data.cityofnewyork.us/resource/h9gi-nx95.geojson",
+    info_url="https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95",
+    description="Motor vehicle crashes in NYC from 2012 to the present.",
+    size=2000000,
+    epsg=4326,
+)
+
 
 def open_data_sources():
     """Constructs SourceDict of open data sources for Citi Bike SDSS."""
     sources = util.SourceDict(
-        [
-            # Census
-            util.Source(
-                name="census",
-                data_url="https://data.cityofnewyork.us/resource/i69b-3rdj.geojson",
-                info_url="https://data.cityofnewyork.us/City-Government/2010-Census-Tracts/fxpq-c8ku",
-                description="2010 Census Tracts from the US Census for NYC.",
-            ),
-            # Bike routes
-            util.Source(
-                name="bike_routes",
-                data_url="https://data.cityofnewyork.us/resource/s5uu-3ajy.geojson",
-                info_url="https://data.cityofnewyork.us/Transportation/New-York-City-Bike-Routes/7vsa-caz7",
-                description="Locations of bike lanes and routes throughout NYC.",
-            ),
-            # Streets
-            util.Source(
-                name="streets",
-                data_url="https://data.cityofnewyork.us/resource/8rma-cm9c.geojson",
-                info_url="https://data.cityofnewyork.us/City-Government/NYC-Street-Centerline-CSCL-/exjm-f27b",
-                description="Road-bed representation of New York City streets.",
-            ),
-            # Borough boundaries
-            util.Source(
-                name="boroughs",
-                data_url="https://data.cityofnewyork.us/resource/7t3b-ywvw.geojson",
-                info_url="https://data.cityofnewyork.us/City-Government/Borough-Boundaries/tqmj-j8zm",
-                description="Boundaries of NYC boroughs, water areas excluded.",
-            ),
-            # Motor vehicle crashes and collisions
-            util.Source(
-                name="motor_vehicle_crashes",
-                data_url="https://data.cityofnewyork.us/resource/h9gi-nx95.geojson",
-                info_url="https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95",
-                description="Motor vehicle crashes in NYC from 2012 to the present.",
-            ),
-
-        ]
+        [census_acs_pop, bike_routes, streets, boroughs, motor_vehicle_crashes, subways, census_nta]
     )
-
     return sources
 
 
@@ -63,11 +99,13 @@ def get_open_data(sources, limit=1000000):
     return gdf_dict
 
 
-def clean_open_data(gdf_dict: dict):
+def clean_open_data(data_dict):
     """Cleans open data for Citi Bike SDSS.
 
     Arguments:
-    gdf_dict: A dict of GeoDataFrames to be cleaned; data is cleaned in place."""
+    gdf_dict: A DataDict of GeoDataFrames to be cleaned; data is cleaned in place."""
+
+    gdf_dict = data_dict.data
 
     print("Cleaning open data...")
 
@@ -108,75 +146,14 @@ def clean_open_data(gdf_dict: dict):
     ]
 
     # Clip filtered GeoDataFrame by the borough boundaries
+    mask = gdf_dict["boroughs"]
     print("Clipping motor vehicles layer...")
-    gdf_dict[mv] = gp.clip(gdf_dict[mv], gdf_dict["boroughs"])
+    gdf_dict[mv] = gp.clip(gdf_dict[mv], mask)
+
+    print("Clipping census population layer...")
+    census = "acs_population"
+    gdf_dict[census] = gp.clip(gdf_dict[census], mask)
 
     print("Data cleaning complete.\n")
 
 
-def project_open_data(gdf_dict: dict, epsg: int, preserve=False):
-    """Transforms GeoDataFrame dict to selected coordinate reference system.
-    Arguments:
-    gdf_dict: Dict of GeoDataFrames to be transformed; GDFs are transformed in place.
-    epsg: EPSG code of target coordinate reference system.
-    preserve: If true, original geometry column is preserved in gdf.orig_geometry.
-    """
-    print("Projecting open data...")
-    for gdf in gdf_dict:
-        # If no CRS, set existing CRS before transformation
-        if gdf_dict[gdf].crs is None:
-            gdf_dict[gdf].set_crs(epsg=4263, inplace=True)
-        # If preserve==True, store original geometry in new column
-        if preserve:
-            gdf["orig_geometry"] = gdf.geometry
-        # Transform to CRS of choice
-        print(f"Projecting {gdf} layer...")
-        gdf_dict[gdf].to_crs(epsg=epsg, inplace=True)
-
-    print("Projection complete.\n")
-
-
-def write_open_data(gdf_dict: dict, path: str):
-    """Writes open data from gdf_dict to a GeoPackage."""
-    util.gdf_dict_to_gpkg(gdf_dict, path)
-
-# To add to source list
-acs = util.Source(
-    name="nyc_acs",
-    data_url="http://api.census.gov/data/2021/acs/acs1",
-    info_url="https://api.census.gov/data/2021/acs/acs1.html",
-    description="General API info for American Community Survey data.",
-    api_key="bc7a87bd95f8f3135fe9f3de03202bd6d427a1b8",
-    api_key_date="2023-04-03",
-)
-
-sources = open_data_sources()
-open_gdfs = get_open_data(sources, limit=2000000)
-
-clean_open_data(open_gdfs)
-project_open_data(open_gdfs, epsg=2263)
-write_open_data(open_gdfs, "open_data.gpkg")
-
-
-# Write a GeoPackage to path with the data from specified URLs as layers
-# and store the resulting dict of GeoDataFrames
-
-# bike_gdfs is a dict of GeoDataFrames; keys are the same as my_urls above
-# this command also writes to a GeoPackage at the given path
-
-
-# @click.command()
-# @click.option(
-#     "--url", "-u", "urls", type=(str, str), multiple=True, default=open_data_urls
-# )
-# @click.option("--limit", "-l", "limit", type=int, default=1000000)
-# @click.option("--path", "-p", "path", type=str, default="citibike_data.gpkg")
-# def main(urls, path, limit):
-#     open_data_to_gpkg(urls, path, limit)
-
-
-# if __name__ == "__main__":
-# main()
-
-# bike_gdfs = util.gdf_dict(my_urls, 100000)
-# mask = bike_gdfs[borough_boundaries.geometry]
