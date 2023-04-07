@@ -25,7 +25,7 @@ class Source:
             self.api_key = api_key
 
         if api_key_date is not None:
-            self.api_key_date = api_key_date
+            self.api_key_date = api_key_date        
 
 class SourceDict:
     """Holds a dict of Source objects.

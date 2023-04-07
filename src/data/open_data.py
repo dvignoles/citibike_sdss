@@ -3,8 +3,6 @@ import geopandas as gp
 import pandas as pd
 import os
 
-
-
 def open_data_sources():
     """Constructs SourceDict of open data sources for Citi Bike SDSS."""
     sources = util.SourceDict(
@@ -44,7 +42,7 @@ def open_data_sources():
                 info_url="https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95",
                 description="Motor vehicle crashes in NYC from 2012 to the present.",
             ),
-            # ACS key as of 4/3 bc7a87bd95f8f3135fe9f3de03202bd6d427a1b8
+
         ]
     )
 
@@ -141,7 +139,6 @@ def project_open_data(gdf_dict: dict, epsg: int, preserve=False):
 def write_open_data(gdf_dict: dict, path: str):
     """Writes open data from gdf_dict to a GeoPackage."""
     util.gdf_dict_to_gpkg(gdf_dict, path)
-
 
 # To add to source list
 acs = util.Source(
