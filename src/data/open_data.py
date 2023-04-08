@@ -1,49 +1,199 @@
-import click
 import util
-
-# Define default URLs to download if none are specified in command line
-open_data_urls = (
-    ("census", "https://data.cityofnewyork.us/resource/63ge-mke6.geojson"),
-    ("bike_routes", "https://data.cityofnewyork.us/resource/s5uu-3ajy.geojson"),
-    ("street_centerline", "https://data.cityofnewyork.us/resource/8rma-cm9c.geojson"),
-    (
-        "motor_vehicle_collision_crashes",
-        "https://data.cityofnewyork.us/resource/h9gi-nx95.geojson",
-    ),
-)
+import geopandas as gpd
+import pandas as pd
 
 
-def open_data_to_gpkg(urls=open_data_urls, path="citibike_data.gpkg", limit=1000000):
-    urls_dict = {}
+class OpenDataSource(util.Source):
+    """Holds information about a source from NYC Open Data.
 
-    # If urls is a tuple of tuples, iterate through the tuples and construct the dict
-    if type(urls[0]) == tuple:
-        for url_tuple in urls:
-            urls_dict[url_tuple[0]] = url_tuple[1]
-    # Else if urls is a tuple of strings (if just one URL is given), construct dict from tuple
-    elif type(urls[0]) == str:
-        urls_dict[urls[0]] = urls[1]
-    else:
-        raise TypeError
+    Can also be used for generic API requests that return
+    FeatureCollections.
 
-    # Write a GeoPackage to path with the data from specified URLs as layers
-    # and store the resulting dict of GeoDataFrames
+    Attributes:
+    data_url: the URL from which the data will be downloaded
+    info_url: the URL to a page providing information about the dataset
+    size: the expected maximum size of the dataset (in rows); sets the limit of the API request
+    to_clip: marks a source as in need of clipping
+    """
 
-    # bike_gdfs is a dict of GeoDataFrames; keys are the same as my_urls above
-    # this command also writes to a GeoPackage at the given path
-    bike_gdfs = util.urls_to_gpkg(urls_dict, path, limit)
-    return bike_gdfs
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        data_url: str,
+        info_url: str,
+        epsg: int,
+        size=1000000,
+        to_clip=False,
+    ):
+        self.data_url = data_url
+        self.info_url = info_url
+        self.size = size
+        super().__init__(name=name, description=description, epsg=epsg)
+
+    def get(self):
+        gdf = util.gdf_from_url(url=self.data_url, limit=self.size)
+        return gdf
 
 
-@click.command()
-@click.option(
-    "--url", "-u", "urls", type=(str, str), multiple=True, default=open_data_urls
-)
-@click.option("--limit", "-l", "limit", type=int, default=1000000)
-@click.option("--path", "-p", "path", type=str, default="citibike_data.gpkg")
-def main(urls, path, limit):
-    open_data_to_gpkg(urls, path, limit)
+# Define sources (doing so separately from open_data_sources() allows
+# flexibility in which sources to include)
+def census_tracts_geom():
+    src = OpenDataSource(
+        name="census_geom",
+        data_url="https://data.cityofnewyork.us/resource/i69b-3rdj.geojson",
+        info_url="https://data.cityofnewyork.us/City-Government/2010-Census-Tracts/fxpq-c8ku",
+        description="2010 Census Tracts from the US Census for NYC.",
+        epsg=4326,
+    )
+    return src
 
 
-if __name__ == "__main__":
-    main()
+def subways():
+    src = OpenDataSource(
+        name="subway_stations",
+        description="Point layer of all subway stations in NYC.",
+        data_url="https://data.cityofnewyork.us/resource/kk4q-3rt2.geojson",
+        info_url="https://data.cityofnewyork.us/Transportation/Subway-Stations/arq3-7z49",
+        epsg=4326,
+    )
+    return src
+
+
+def census_nta():
+    src = OpenDataSource(
+        name="census_nta",
+        description="Aggregated population for NYC Neighborhood Tabulation Areas.",
+        data_url="https://data.cityofnewyork.us/resource/rnsn-acs2.geojson",
+        info_url="https://data.cityofnewyork.us/City-Government/Census-Demographics-at-the-Neighborhood-Tabulation/rnsn-acs2",
+        epsg=4326,
+    )
+    return src
+
+
+def bike_routes():
+    src = OpenDataSource(
+        name="bike_routes",
+        data_url="https://data.cityofnewyork.us/resource/s5uu-3ajy.geojson",
+        info_url="https://data.cityofnewyork.us/Transportation/New-York-City-Bike-Routes/7vsa-caz7",
+        description="Locations of bike lanes and routes throughout NYC.",
+        epsg=4326,
+    )
+    return src
+
+
+def streets():
+    src = OpenDataSource(
+        name="streets",
+        data_url="https://data.cityofnewyork.us/resource/8rma-cm9c.geojson",
+        info_url="https://data.cityofnewyork.us/City-Government/NYC-Street-Centerline-CSCL-/exjm-f27b",
+        description="Road-bed representation of New York City streets.",
+        epsg=4326,
+    )
+    return src
+
+
+def boroughs():
+    src = OpenDataSource(
+        name="boroughs",
+        data_url="https://data.cityofnewyork.us/resource/7t3b-ywvw.geojson",
+        info_url="https://data.cityofnewyork.us/City-Government/Borough-Boundaries/tqmj-j8zm",
+        description="Boundaries of NYC boroughs, water areas excluded.",
+        epsg=4326,
+    )
+    return src
+
+
+def motor_vehicle_crashes():
+    src = OpenDataSource(
+        name="motor_vehicle_crashes",
+        data_url="https://data.cityofnewyork.us/resource/h9gi-nx95.geojson",
+        info_url="https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95",
+        description="Motor vehicle crashes in NYC from 2012 to the present.",
+        size=2000000,
+        epsg=4326,
+    )
+    return src
+
+
+def open_data_sources():
+    """Constructs SourceDict of open data sources for Citi Bike SDSS."""
+    sources = util.SourceDict(
+        [
+            bike_routes(),
+            streets(),
+            boroughs(),
+            motor_vehicle_crashes(),
+            subways(),
+            census_nta(),
+        ]
+    )
+    return sources
+
+
+def get_open_data(sources, limit=1000000):
+    """Downloads open data and returns a dict of GeoDataFrames.
+
+    Arguments:
+    sources: a SourceDict containing the Sources for the open data
+    limit: the maximum size of the JSON request for each Source
+
+    Returns:
+    gdf_dict: a dict of GeoDataFrames of the form {"name": GDF}
+    """
+    gdf_dict = util.gdf_dict(sources.url_dict(), limit)
+    return gdf_dict
+
+
+def clean_open_data(data_dict):
+    """Cleans open data for Citi Bike SDSS.
+
+    Arguments:
+    gdf_dict: A DataDict of GeoDataFrames to be cleaned; data is cleaned in place."""
+
+    gdf_dict = data_dict.data
+
+    print("Cleaning open data...")
+
+    # Motor vehicle layer processing
+    print("Filtering motor vehicles layer...")
+    mv = "motor_vehicle_crashes"
+
+    # Keep only useful columns
+    keep = [
+        "geometry",
+        "zip_code",
+        "crash_date",
+        "number_of_cyclist_killed",
+        "number_of_cyclist_injured",
+        "latitude",
+        "longitude",
+        "borough",
+    ]
+    gdf_dict[mv] = gdf_dict[mv][keep]
+
+    # Change numeric columns to numeric types
+    to_num = [
+        "number_of_cyclist_killed",
+        "number_of_cyclist_injured",
+        "latitude",
+        "longitude",
+    ]
+    for col in to_num:
+        gdf_dict[mv][col] = pd.to_numeric(gdf_dict[mv][col])
+
+    # Filter motor vehicle crashes to only include crashes on Jan 1, 2019 or later
+    gdf_dict[mv] = gdf_dict[mv][gdf_dict[mv].crash_date >= "2019-01-01T00:00:00.000"]
+
+    # Only include crashes in which at least one cyclist was killed or injured
+    gdf_dict[mv] = gdf_dict[mv][
+        (gdf_dict[mv].number_of_cyclist_killed > 0)
+        | (gdf_dict[mv].number_of_cyclist_injured > 0)
+    ]
+
+    # Clip filtered GeoDataFrame by the borough boundaries
+    mask = gdf_dict["boroughs"]
+    print("Clipping motor vehicles layer...")
+    gdf_dict[mv] = gpd.clip(gdf_dict[mv], mask)
+
+    print("Data cleaning complete.\n")

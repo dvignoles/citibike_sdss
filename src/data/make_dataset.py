@@ -1,25 +1,53 @@
 """Dataset download and clean driver script"""
 import logging
 import click
+import geopandas as gpd
 from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
-
 import open_data
 import gbfs
+import acs
+
+
+OPEN_DATA_GPKG = "data/processed/open_data.gpkg"
+ACS_GPKG = "data/processed/acs.gpkg"
+GBFS_GPKG = "data/processed/gbfs.gpkg"
 
 
 def make_open_data(project_dir, logger=None):
-
     if logger is not None:
         logger.info("downloading NYC Open Data")
 
-    open_data.open_data_to_gpkg(
-        path=project_dir.joinpath("data/raw/opendata.gpkg"), limit=2000000
-    )
+    # Create util.SourceDict of open data sources
+    open_sources = open_data.open_data_sources()
+
+    # Download data from util.SourceDict into util.DataDict
+    open_data_dict = open_sources.get()
+
+    # Project, filter, and clean data
+    open_data_dict.set_crs()
+    open_data_dict.to_crs(2263)
+    open_data.clean_open_data(open_data_dict)
+
+    # Write open_data to GeoPackage
+    open_data_dict.to_file(project_dir.joinpath(OPEN_DATA_GPKG))
+
+
+def make_census_pop(project_dir, logger=None):
+    if logger is not None:
+        logger.info("downloading ACS Census population")
+
+    if project_dir.joinpath(OPEN_DATA_GPKG).exists():
+        mask = gpd.read_file(project_dir.joinpath(OPEN_DATA_GPKG), layer="boroughs")
+    else:
+        mask = open_data.boroughs().get().set_crs(4326).to_crs(2263)
+
+    gdf = acs.get_census_acs_pop(crs=2263, mask=mask)
+
+    gdf.to_file(project_dir.joinpath(ACS_GPKG))
 
 
 def make_gbfs_stations(project_dir, logger=None):
-
     if logger is not None:
         logger.info("downloading Citi Bike GBFS Station Information")
 
@@ -27,7 +55,7 @@ def make_gbfs_stations(project_dir, logger=None):
     stations._download_raw(
         output_file=project_dir.joinpath("data/raw/station_info.json.gz")
     )
-    stations.process(output_file=project_dir.joinpath("data/processed/gbfs.gpkg"))
+    stations.process(output_file=project_dir.joinpath(GBFS_GPKG))
 
 
 def make_all(project_dir, logger=None):
@@ -42,25 +70,31 @@ def cli(ctx):
     cleaned data ready to be analyzed (saved in ../processed).
     """
     ctx.ensure_object(dict)
-    ctx.obj['logger'] = logging.getLogger(__name__)
+    ctx.obj["logger"] = logging.getLogger(__name__)
 
 
-@cli.command(help='Get NYC OpenData')
+@cli.command(help="Get NYC OpenData")
 @click.pass_context
 def get_opendata(ctx):
-    make_open_data(ctx.obj['project_dir'], logger=ctx.obj['logger'])
+    make_open_data(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
-@cli.command(help='Get GBFS Station Status')
+@cli.command(help="Get GBFS Station Status")
 @click.pass_context
 def get_stations(ctx):
-    make_gbfs_stations(ctx.obj['project_dir'], logger=ctx.obj['logger'])
+    make_gbfs_stations(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
-@cli.command(help='Get all datasets')
+@cli.command(help="Get ACS Census Population")
+@click.pass_context
+def get_acs_population(ctx):
+    make_census_pop(ctx.obj["project_dir"], logger=ctx.obj["logger"])
+
+
+@cli.command(help="Get all datasets")
 @click.pass_context
 def get_all(ctx):
-    make_all(ctx.obj['project_dir'], logger=ctx.obj['logger'])
+    make_all(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
 if __name__ == "__main__":
@@ -74,4 +108,4 @@ if __name__ == "__main__":
     # load up the .env entries as environment variables
     load_dotenv(find_dotenv())
 
-    cli(obj={'project_dir': project_dir})
+    cli(obj={"project_dir": project_dir})
