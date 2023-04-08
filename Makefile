@@ -30,6 +30,7 @@ endif
 dev_requirements: test_environment
 	$(PYTHON_INTERPRETER) -m pip install -U pip setuptools wheel
 	$(PYTHON_INTERPRETER) -m pip install -r dev-requirements.txt
+	pre-commit install -t pre-commit
 
 ## Make Dataset
 data:

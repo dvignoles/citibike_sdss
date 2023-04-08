@@ -40,7 +40,8 @@ Project Organization
     ├── README.md          <- The top-level README for developers using this project.
     ├── data
     │   ├── interim        <- Intermediate data that has been transformed.
-    │   ├── processed      <- The final, canonical data sets for modeling.
+    │   ├── processed      <- The final, canonical data sets.
+    │   ├── prepared       <- Cleaned base datasets, ready for analysis. 
     │   └── raw            <- The original, immutable data dump.
     │
     ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
