@@ -16,17 +16,23 @@ else
 HAS_CONDA=True
 endif
 
+ifeq (,$(shell which mamba))
+HAS_MAMBA=False
+else
+HAS_MAMBA=True
+endif
+
 #################################################################################
 # COMMANDS                                                                      #
 #################################################################################
 
 ## Install Python Dependencies
-requirements: test_environment
+dev_requirements: test_environment
 	$(PYTHON_INTERPRETER) -m pip install -U pip setuptools wheel
-	$(PYTHON_INTERPRETER) -m pip install -r requirements.txt
+	$(PYTHON_INTERPRETER) -m pip install -r dev-requirements.txt
 
 ## Make Dataset
-data: requirements
+data:
 	$(PYTHON_INTERPRETER) src/data/make_dataset.py
 
 ## Delete all compiled Python files
@@ -54,19 +60,24 @@ else
 	aws s3 sync s3://$(BUCKET)/data/ data/ --profile $(PROFILE)
 endif
 
+## Delete conda environment
+delete_environment:
+	conda remove -n $(PROJECT_NAME) --all -y
+
 ## Set up python interpreter environment
 create_environment:
-ifeq (True,$(HAS_CONDA))
-		@echo ">>> Detected conda, creating conda environment."
-ifeq (3,$(findstring 3,$(PYTHON_INTERPRETER)))
-	conda create --name $(PROJECT_NAME) python=3
-else
-	conda create --name $(PROJECT_NAME) python=2.7
-endif
+ifeq (True,$(HAS_MAMBA))
+		@echo ">>> Detected mamba, creating conda environment using mamba."
+		mamba env create -f environment.yaml
 		@echo ">>> New conda env created. Activate with:\nsource activate $(PROJECT_NAME)"
 else
-	$(PYTHON_INTERPRETER) -m venv env 
-	@echo ">>> New venv created. Run 'source env/bin/activate' to activate"
+ifeq (True,$(HAS_CONDA))
+		@echo ">>> Detected conda, creating conda environment."
+		conda env create -f environment.yaml
+		@echo ">>> New conda env created. Activate with:\nsource activate $(PROJECT_NAME)"
+else
+	@echo ">>> Mamba/Conda is required to setup environment"
+endif
 endif
 
 ## Test python environment is setup correctly
