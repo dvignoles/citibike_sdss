@@ -6,6 +6,7 @@ from dotenv import find_dotenv, load_dotenv
 
 import open_data
 import gbfs
+import sas
 
 
 def make_open_data(project_dir, logger):
@@ -36,9 +37,18 @@ def make_gbfs_status(project_dir, logger):
     logger.info(f"{count} GBFS captures processed")
 
 
+def make_sas_infill(project_dir, logger):
+    logger.info("downloading Citi Bike Infill Suggest A Station")
+    output_file = project_dir.joinpath("data/processed/sas.gpkg")
+    infill = sas.SuggestAStation()
+    infill.process(output_file)
+
+
 def make_all(project_dir, logger):
     make_open_data(project_dir, logger)
     make_gbfs_stations(project_dir, logger)
+    make_gbfs_status(project_dir, logger)
+    make_sas_infill(project_dir, logger)
 
 
 @click.group()
@@ -57,7 +67,7 @@ def get_opendata(ctx):
     make_open_data(ctx.obj['project_dir'], logger=ctx.obj['logger'])
 
 
-@cli.command(help='Get GBFS Station Status')
+@cli.command(help='Get GBFS Station Information')
 @click.pass_context
 def get_stations(ctx):
     make_gbfs_stations(ctx.obj['project_dir'], logger=ctx.obj['logger'])
@@ -67,6 +77,12 @@ def get_stations(ctx):
 @click.pass_context
 def get_status(ctx):
     make_gbfs_status(ctx.obj['project_dir'], logger=ctx.obj['logger'])
+
+
+@cli.command(help='Get Suggest A Station Infill')
+@click.pass_context
+def get_sas_infill(ctx):
+    make_sas_infill(ctx.obj['project_dir'], logger=ctx.obj['logger'])
 
 
 @cli.command(help='Get all datasets')
