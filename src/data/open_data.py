@@ -1,6 +1,6 @@
-import util
 import geopandas as gpd
 import pandas as pd
+import util
 
 
 class OpenDataSource(util.Source):

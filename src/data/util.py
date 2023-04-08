@@ -1,7 +1,8 @@
+import gzip
+import warnings
+
 import geopandas as gp
 import requests
-import warnings
-import gzip
 
 
 # Classes for handling sources

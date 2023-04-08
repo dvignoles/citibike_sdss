@@ -1,14 +1,14 @@
 """Dataset download and clean driver script"""
 import logging
-import click
-import geopandas as gpd
 from pathlib import Path
-from dotenv import find_dotenv, load_dotenv
-import open_data
-import gbfs
-import sas
-import acs
 
+import acs
+import click
+import gbfs
+import geopandas as gpd
+import open_data
+import sas
+from dotenv import find_dotenv, load_dotenv
 
 OPEN_DATA_GPKG = "data/processed/open_data.gpkg"
 ACS_GPKG = "data/processed/acs.gpkg"
@@ -99,7 +99,7 @@ def get_opendata(ctx):
     make_open_data(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
-@cli.command(help='Get GBFS Station Information')
+@cli.command(help="Get GBFS Station Information")
 @click.pass_context
 def get_stations(ctx):
     make_gbfs_stations(ctx.obj["project_dir"], logger=ctx.obj["logger"])
@@ -111,19 +111,19 @@ def get_acs_population(ctx):
     make_census_pop(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
-@cli.command(help='Get GBFS Station Status')
+@cli.command(help="Get GBFS Station Status")
 @click.pass_context
 def get_status(ctx):
-    make_gbfs_status(ctx.obj['project_dir'], logger=ctx.obj['logger'])
+    make_gbfs_status(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
-@cli.command(help='Get Suggest A Station Infill')
+@cli.command(help="Get Suggest A Station Infill")
 @click.pass_context
 def get_sas_infill(ctx):
-    make_sas_infill(ctx.obj['project_dir'], logger=ctx.obj['logger'])
+    make_sas_infill(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
-@cli.command(help='Get all datasets')
+@cli.command(help="Get all datasets")
 @click.pass_context
 def get_all(ctx):
     make_all(ctx.obj["project_dir"], logger=ctx.obj["logger"])
