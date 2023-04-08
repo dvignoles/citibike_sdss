@@ -1,86 +1,132 @@
 import util
-import geopandas as gp
+import geopandas as gpd
 import pandas as pd
-import os
-import importlib
+
+
+class OpenDataSource(util.Source):
+    """Holds information about a source from NYC Open Data.
+
+    Can also be used for generic API requests that return
+    FeatureCollections.
+
+    Attributes:
+    data_url: the URL from which the data will be downloaded
+    info_url: the URL to a page providing information about the dataset
+    size: the expected maximum size of the dataset (in rows); sets the limit of the API request
+    to_clip: marks a source as in need of clipping
+    """
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        data_url: str,
+        info_url: str,
+        epsg: int,
+        size=1000000,
+        to_clip=False,
+    ):
+        self.data_url = data_url
+        self.info_url = info_url
+        self.size = size
+        super().__init__(name=name, description=description, epsg=epsg)
+
+    def get(self):
+        gdf = util.gdf_from_url(url=self.data_url, limit=self.size)
+        return gdf
 
 
 # Define sources (doing so separately from open_data_sources() allows
-# flexibility in which sources to include) 
-census_tracts_geom = util.OpenDataSource(
-    name="census_geom",
-    data_url="https://data.cityofnewyork.us/resource/i69b-3rdj.geojson",
-    info_url="https://data.cityofnewyork.us/City-Government/2010-Census-Tracts/fxpq-c8ku",
-    description="2010 Census Tracts from the US Census for NYC.",
-    epsg=4326,
-)
-
-census_acs_pop = util.CensusSource(
-    name="acs_population",
-    description="Total population five-year estimates from ACS 2019.",
-    place="New York, NY",
-    variables=["B01003_001E"],
-    epsg=3857,
-)
-
-subways = util.OpenDataSource(
-    name="subway_stations",
-    description="Point layer of all subway stations in NYC.",
-    data_url="https://data.cityofnewyork.us/resource/kk4q-3rt2.geojson",
-    info_url="https://data.cityofnewyork.us/Transportation/Subway-Stations/arq3-7z49",
-    epsg=4326,
-)
-
-census_nta = util.OpenDataSource(
-    name="census_nta",
-    description="Aggregated population for NYC Neighborhood Tabulation Areas.",
-    data_url="https://data.cityofnewyork.us/resource/rnsn-acs2.geojson",
-    info_url="https://data.cityofnewyork.us/City-Government/Census-Demographics-at-the-Neighborhood-Tabulation/rnsn-acs2",
-    epsg=4326
+# flexibility in which sources to include)
+def census_tracts_geom():
+    src = OpenDataSource(
+        name="census_geom",
+        data_url="https://data.cityofnewyork.us/resource/i69b-3rdj.geojson",
+        info_url="https://data.cityofnewyork.us/City-Government/2010-Census-Tracts/fxpq-c8ku",
+        description="2010 Census Tracts from the US Census for NYC.",
+        epsg=4326,
     )
+    return src
 
-# Bike routes
-bike_routes = util.OpenDataSource(
-    name="bike_routes",
-    data_url="https://data.cityofnewyork.us/resource/s5uu-3ajy.geojson",
-    info_url="https://data.cityofnewyork.us/Transportation/New-York-City-Bike-Routes/7vsa-caz7",
-    description="Locations of bike lanes and routes throughout NYC.",
-    epsg=4326,
-)
 
-# Streets
-streets = util.OpenDataSource(
-    name="streets",
-    data_url="https://data.cityofnewyork.us/resource/8rma-cm9c.geojson",
-    info_url="https://data.cityofnewyork.us/City-Government/NYC-Street-Centerline-CSCL-/exjm-f27b",
-    description="Road-bed representation of New York City streets.",
-    epsg=4326,
-)
+def subways():
+    src = OpenDataSource(
+        name="subway_stations",
+        description="Point layer of all subway stations in NYC.",
+        data_url="https://data.cityofnewyork.us/resource/kk4q-3rt2.geojson",
+        info_url="https://data.cityofnewyork.us/Transportation/Subway-Stations/arq3-7z49",
+        epsg=4326,
+    )
+    return src
 
-# Borough boundaries
-boroughs = util.OpenDataSource(
-    name="boroughs",
-    data_url="https://data.cityofnewyork.us/resource/7t3b-ywvw.geojson",
-    info_url="https://data.cityofnewyork.us/City-Government/Borough-Boundaries/tqmj-j8zm",
-    description="Boundaries of NYC boroughs, water areas excluded.",
-    epsg=4326,
-)
 
-# Motor vehicle crashes and collisions
-motor_vehicle_crashes = util.OpenDataSource(
-    name="motor_vehicle_crashes",
-    data_url="https://data.cityofnewyork.us/resource/h9gi-nx95.geojson",
-    info_url="https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95",
-    description="Motor vehicle crashes in NYC from 2012 to the present.",
-    size=2000000,
-    epsg=4326,
-)
+def census_nta():
+    src = OpenDataSource(
+        name="census_nta",
+        description="Aggregated population for NYC Neighborhood Tabulation Areas.",
+        data_url="https://data.cityofnewyork.us/resource/rnsn-acs2.geojson",
+        info_url="https://data.cityofnewyork.us/City-Government/Census-Demographics-at-the-Neighborhood-Tabulation/rnsn-acs2",
+        epsg=4326,
+    )
+    return src
+
+
+def bike_routes():
+    src = OpenDataSource(
+        name="bike_routes",
+        data_url="https://data.cityofnewyork.us/resource/s5uu-3ajy.geojson",
+        info_url="https://data.cityofnewyork.us/Transportation/New-York-City-Bike-Routes/7vsa-caz7",
+        description="Locations of bike lanes and routes throughout NYC.",
+        epsg=4326,
+    )
+    return src
+
+
+def streets():
+    src = OpenDataSource(
+        name="streets",
+        data_url="https://data.cityofnewyork.us/resource/8rma-cm9c.geojson",
+        info_url="https://data.cityofnewyork.us/City-Government/NYC-Street-Centerline-CSCL-/exjm-f27b",
+        description="Road-bed representation of New York City streets.",
+        epsg=4326,
+    )
+    return src
+
+
+def boroughs():
+    src = OpenDataSource(
+        name="boroughs",
+        data_url="https://data.cityofnewyork.us/resource/7t3b-ywvw.geojson",
+        info_url="https://data.cityofnewyork.us/City-Government/Borough-Boundaries/tqmj-j8zm",
+        description="Boundaries of NYC boroughs, water areas excluded.",
+        epsg=4326,
+    )
+    return src
+
+
+def motor_vehicle_crashes():
+    src = OpenDataSource(
+        name="motor_vehicle_crashes",
+        data_url="https://data.cityofnewyork.us/resource/h9gi-nx95.geojson",
+        info_url="https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95",
+        description="Motor vehicle crashes in NYC from 2012 to the present.",
+        size=2000000,
+        epsg=4326,
+    )
+    return src
 
 
 def open_data_sources():
     """Constructs SourceDict of open data sources for Citi Bike SDSS."""
     sources = util.SourceDict(
-        [census_acs_pop, bike_routes, streets, boroughs, motor_vehicle_crashes, subways, census_nta]
+        [
+            bike_routes(),
+            streets(),
+            boroughs(),
+            motor_vehicle_crashes(),
+            subways(),
+            census_nta(),
+        ]
     )
     return sources
 
@@ -148,12 +194,6 @@ def clean_open_data(data_dict):
     # Clip filtered GeoDataFrame by the borough boundaries
     mask = gdf_dict["boroughs"]
     print("Clipping motor vehicles layer...")
-    gdf_dict[mv] = gp.clip(gdf_dict[mv], mask)
-
-    print("Clipping census population layer...")
-    census = "acs_population"
-    gdf_dict[census] = gp.clip(gdf_dict[census], mask)
+    gdf_dict[mv] = gpd.clip(gdf_dict[mv], mask)
 
     print("Data cleaning complete.\n")
-
-
