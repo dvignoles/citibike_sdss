@@ -13,15 +13,10 @@ See `./Makefile` for details about what each command does.
 ```
 # create python environemtn
 make create_environment
-
-#If using conda
 conda activate citibike_sdss
 
-#If not using conda
-source env/bin/activate
-
-# install python dependencies
-make requirements
+# install python developer dependencies
+make dev_requirements
 
 # configure aws access
 aws configure
@@ -44,7 +39,6 @@ Project Organization
     ├── Makefile           <- Makefile with commands like `make data` or `make train`
     ├── README.md          <- The top-level README for developers using this project.
     ├── data
-    │   ├── external       <- Data from third party sources.
     │   ├── interim        <- Intermediate data that has been transformed.
     │   ├── processed      <- The final, canonical data sets for modeling.
     │   └── raw            <- The original, immutable data dump.
