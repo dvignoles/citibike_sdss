@@ -1,13 +1,14 @@
-import util
-import click
 import gzip
 import json
-import tempfile
 import sqlite3
-import pandas as pd
-import geopandas as gpd
+import tempfile
 from datetime import datetime
 from pathlib import Path
+
+import click
+import geopandas as gpd
+import pandas as pd
+import util
 
 
 class Stations:
@@ -73,7 +74,7 @@ class Stations:
         gdf.to_crs("EPSG:2263", inplace=True)
 
         # save to file
-        gdf.to_file(output_file, layer="station", mode=mode, crs='EPSG:2263')
+        gdf.to_file(output_file, layer="station", mode=mode, crs="EPSG:2263")
         self.processed_file = output_file
 
         # clean up raw json file if used

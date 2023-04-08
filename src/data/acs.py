@@ -1,6 +1,6 @@
 import cenpy
-import util
 import geopandas as gpd
+import util
 
 
 class CensusSource(util.Source):

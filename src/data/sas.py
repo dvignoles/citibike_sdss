@@ -1,11 +1,12 @@
 "Suggest a station"
 
 
-import requests
-import time
 import random
-import pandas as pd
+import time
+
 import geopandas as gpd
+import pandas as pd
+import requests
 from bs4 import BeautifulSoup
 
 
@@ -19,7 +20,7 @@ class SuggestAStation:
         # get initial page state
         base_page = requests.get(self.url)
         base_page.raise_for_status()
-        soup = BeautifulSoup(base_page.text, 'html.parser')
+        soup = BeautifulSoup(base_page.text, "html.parser")
         self.max_comments = int(soup.find_all("span", "comments-count")[0].text)
         # comments intially loaded on page
         self.comments = [
@@ -43,14 +44,14 @@ class SuggestAStation:
             resp["location"] = comment["data-comment-locsumm"]
         except KeyError:
             resp["location"] = None
-        
+
         # sometimes empty coordinates ''
         try:
-            resp['lon'] = float(resp['lon'])
-            resp['lat'] = float(resp['lat'])
+            resp["lon"] = float(resp["lon"])
+            resp["lat"] = float(resp["lat"])
         except ValueError:
-            resp['lon'] = None
-            resp['lat'] = None
+            resp["lon"] = None
+            resp["lat"] = None
 
         return resp
 
@@ -80,7 +81,6 @@ class SuggestAStation:
         return comments
 
     def add_remaining_comments(self, delay_requests=True):
-
         remaining = True
         page = 1
         while remaining:

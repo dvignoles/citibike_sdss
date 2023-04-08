@@ -1,18 +1,19 @@
 """Dataset download and clean driver script"""
 import logging
-import click
-import geopandas as gpd
 from pathlib import Path
-from dotenv import find_dotenv, load_dotenv
-import open_data
-import gbfs
-import sas
+
 import acs
+import click
+import gbfs
+import geopandas as gpd
+import open_data
+import sas
+from dotenv import find_dotenv, load_dotenv
 
-
-OPEN_DATA_GPKG = "data/processed/open_data.gpkg"
-ACS_GPKG = "data/processed/acs.gpkg"
-GBFS_GPKG = "data/processed/gbfs.gpkg"
+OPEN_DATA_GPKG = "data/prepared/open_data.gpkg"
+ACS_GPKG = "data/prepared/acs.gpkg"
+GBFS_GPKG = "data/prepared/gbfs.gpkg"
+SAS_GPKG = "data/prepared/sas.gpkg"
 
 
 def make_open_data(project_dir, logger=None):
@@ -62,7 +63,7 @@ def make_gbfs_stations(project_dir, logger=None):
 def make_gbfs_status(project_dir, logger):
     logger.info("downloading Citi Bike GBFS Station Information")
 
-    output_file = project_dir.joinpath("data/processed/gbfs.gpkg")
+    output_file = project_dir.joinpath(GBFS_GPKG)
     raw_dir = project_dir.joinpath("data/raw/station_status")
     status = gbfs.StationStatus(output_file, raw_dir)
     count = status.process()
@@ -71,13 +72,14 @@ def make_gbfs_status(project_dir, logger):
 
 def make_sas_infill(project_dir, logger):
     logger.info("downloading Citi Bike Infill Suggest A Station")
-    output_file = project_dir.joinpath("data/processed/sas.gpkg")
+    output_file = project_dir.joinpath(SAS_GPKG)
     infill = sas.SuggestAStation()
     infill.process(output_file)
 
 
 def make_all(project_dir, logger):
     make_open_data(project_dir, logger)
+    make_census_pop(project_dir, logger)
     make_gbfs_stations(project_dir, logger)
     make_gbfs_status(project_dir, logger)
     make_sas_infill(project_dir, logger)
@@ -99,10 +101,16 @@ def get_opendata(ctx):
     make_open_data(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
-@cli.command(help='Get GBFS Station Information')
+@cli.command(help="Get GBFS Station Information")
 @click.pass_context
 def get_stations(ctx):
     make_gbfs_stations(ctx.obj["project_dir"], logger=ctx.obj["logger"])
+
+
+@cli.command(help="Get GBFS Station Status")
+@click.pass_context
+def get_status(ctx):
+    make_gbfs_status(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
 @cli.command(help="Get ACS Census Population")
@@ -111,19 +119,13 @@ def get_acs_population(ctx):
     make_census_pop(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
-@cli.command(help='Get GBFS Station Status')
-@click.pass_context
-def get_status(ctx):
-    make_gbfs_status(ctx.obj['project_dir'], logger=ctx.obj['logger'])
-
-
-@cli.command(help='Get Suggest A Station Infill')
+@cli.command(help="Get Suggest A Station Infill")
 @click.pass_context
 def get_sas_infill(ctx):
-    make_sas_infill(ctx.obj['project_dir'], logger=ctx.obj['logger'])
+    make_sas_infill(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
-@cli.command(help='Get all datasets')
+@cli.command(help="Get all datasets")
 @click.pass_context
 def get_all(ctx):
     make_all(ctx.obj["project_dir"], logger=ctx.obj["logger"])
