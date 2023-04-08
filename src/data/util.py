@@ -1,7 +1,7 @@
 import gzip
 import warnings
 
-import geopandas as gp
+import geopandas as gpd
 import requests
 
 
@@ -178,7 +178,7 @@ def gdf_from_url(url, limit=500000):
     print(f"Downloading data from {url}...")
     response = json_response(url, limit)
     print("Creating GeoDataFrame...")
-    gdf = gp.GeoDataFrame.from_features(response)
+    gdf = gpd.GeoDataFrame.from_features(response)
     print("GeoDataFrame complete.\n")
     return gdf
 

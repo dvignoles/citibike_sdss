@@ -69,7 +69,8 @@ Project Organization
     │   └── visualization  <- Scripts to create exploratory and results oriented visualizations
     │       └── visualize.py
     │
-    └── tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
+    └── .pre-commit-config.yaml <- pre-commit file to run code formatting & linting
+    └── setup.cfg            <- configuration for isort, black, flake8
 
 --------
 
