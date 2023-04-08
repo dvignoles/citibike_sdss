@@ -11,3 +11,4 @@ geopandas
 requests
 beautifulsoup4
 ipykernel
+cenpy
