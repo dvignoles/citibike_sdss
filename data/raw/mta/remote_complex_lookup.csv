@@ -1,4 +1,4 @@
-remote ,booth,complex_id,station,line_name,division
+remote,booth,complex_id,station,line_name,division
 R001,A060,635,WHITEHALL ST,R1,BMT
 R001,A058,635,WHITEHALL ST,R1,BMT
 R001,R101S,635,SOUTH FERRY,R1,IRT
