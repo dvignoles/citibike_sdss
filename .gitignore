@@ -76,7 +76,11 @@ target/
 .ipynb_checkpoints/
 
 # exclude data from source control by default
-/data/
+data/*
+!data/raw/mta/stations.csv
+!data/raw/mta/remote_complex_lookup.csv
+!data/raw/mta/README.md
+
 
 # Mac OS-specific storage files
 .DS_Store
