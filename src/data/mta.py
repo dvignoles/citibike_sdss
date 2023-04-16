@@ -6,38 +6,42 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 import requests
+import util
 from bs4 import BeautifulSoup
-
-from src import util
 
 
 class MtaTurnstiles(util.Source):
     base_url = "http://web.mta.info/developers/"
     catalog_url = base_url + "turnstile.html"
 
-    def __init__(self, raw_dir, gpkg):
-        super().__init__("mta_turnstile", "MTA Turnstile Counts", epsg=None)
+    def __init__(self, raw_dir, gpkg, start_date, end_date):
+        super().__init__("mta_turnstile", "MTA Turnstile Counts", epsg=4326)
 
         assert raw_dir.exists(), "directory does not exist"
         self.raw_dir = Path(raw_dir)
 
+        # parse list of turnstile text file urls
         cat_resp = requests.get(self.catalog_url)
         cat_resp.raise_for_status()
-        self.cat_soup = BeautifulSoup(cat_resp.text)
+        self.cat_soup = BeautifulSoup(cat_resp.text, features="html.parser")
 
         self.gpkg = Path(gpkg)
+        self.start_date = start_date
+        self.end_date = end_date
 
-    def download_raw(self, start_date=None, end_date=None, redownload=False):
+    def download_raw(self, redownload=False):
+        """Download raw text files from mta developer site"""
         date_re = re.compile(r"\d{6}")
         for link in self.cat_soup.find("div", "last").find_all("a"):
             data_url = self.base_url + link.attrs["href"]
             date_str = date_re.search(data_url.split("/")[-1]).group()
             dt = datetime.strptime(date_str, "%y%m%d").date()
 
-            if (start_date is not None) and dt < start_date:
+            # filter by date
+            if (self.start_date is not None) and dt < self.start_date:
                 continue
 
-            if (end_date is not None) and dt > end_date:
+            if (self.end_date is not None) and dt > self.end_date:
                 continue
 
             out_file = self.raw_dir.joinpath(f"turnstile_{date_str}.txt")
@@ -45,13 +49,16 @@ class MtaTurnstiles(util.Source):
             if not out_file.exists() or redownload is True:
                 util.download_file(data_url, out_file)
 
-    def setup_gpkg(self, remote_complex_lookup_csv, stations_csv, replace=False):
+    def setup_gpkg(
+        self, remote_complex_lookup_csv, stations_csv, replace=False, crs=2263
+    ):
         """Create geopackage with necessary base tables for turnstile data"""
 
         if replace:
             if self.gpkg.exists():
                 self.gpkg.unlink()
 
+        # MTA Stations
         stations = pd.read_csv(stations_csv, dtype={"complex id": pd.StringDtype()})
         station_renames = {
             n: n.lower().strip().replace(" ", "_") for n in stations.columns
@@ -62,9 +69,12 @@ class MtaTurnstiles(util.Source):
             geometry=gpd.points_from_xy(
                 x=stations["gtfs_longitude"], y=stations["gtfs_latitude"]
             ),
+            crs=4326,
         )
+        stations.to_crs(crs, inplace=True)
         stations.to_file(self.gpkg, layer="stations", mode="w")
 
+        # Remote -> Complex lookup table
         remote_lookup = pd.read_csv(
             remote_complex_lookup_csv, dtype={"complex_id": pd.StringDtype()}
         )
@@ -131,6 +141,7 @@ class MtaTurnstiles(util.Source):
     def _update_daily_subunit(self, con):
         """Create daily summary table per unit"""
 
+        # create initial table
         con.execute("DROP TABLE IF EXISTS daily_subunit")
         create_sql = """
                 CREATE TABLE daily_subunit AS
@@ -145,6 +156,8 @@ class MtaTurnstiles(util.Source):
             """
         con.execute(create_sql)
         con.commit()
+
+        # fill in remoteunit
         update_sql = """
         WITH ru as(
             SELECT DISTINCT unit_id, remoteunit FROM turnstile_observations
@@ -193,6 +206,7 @@ class MtaTurnstiles(util.Source):
     def raw_to_gpkg(
         self,
     ):
+        """Convert raw text files to geopackage with daily summaries"""
         with sqlite3.connect(self.gpkg) as con:
             for rawfile in sorted(self.raw_dir.glob("turnstile_*.txt")):
                 ts = pd.read_csv(rawfile)
@@ -220,6 +234,7 @@ class MtaTurnstiles(util.Source):
                     ts.date + " " + ts.time, format="%m/%d/%Y %H:%M:%S"
                 )
 
+                # unique id for individual turnstile
                 ts["unit_id"] = (
                     ts.controlarea + ts.remoteunit + ts.subunit_channel_position
                 )

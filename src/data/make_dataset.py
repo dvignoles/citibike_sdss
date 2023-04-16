@@ -1,11 +1,13 @@
 """Dataset download and clean driver script"""
 import logging
+from datetime import date
 from pathlib import Path
 
 import acs
 import click
 import gbfs
 import geopandas as gpd
+import mta
 import open_data
 import sas
 from dotenv import find_dotenv, load_dotenv
@@ -77,12 +79,48 @@ def make_sas_infill(project_dir, logger):
     infill.process(output_file)
 
 
+def make_mta_turnstile(project_dir, logger):
+    # manually prepared lookup tables
+    remote_lookup_csv = project_dir.joinpath("data/raw/mta/remote_complex_lookup.csv")
+    stations_csv = project_dir.joinpath("data/raw/mta/stations.csv")
+
+    # TODO: Parameterize year range
+    for year in range(2019, 2024):
+        raw_dir = project_dir.joinpath("data", "raw", "mta", "turnstile", str(year))
+        raw_dir.mkdir(parents=True, exist_ok=True)
+
+        raw_gpkg = raw_dir.parent.joinpath(f"mta_{year}.gpkg")
+        ts = mta.MtaTurnstiles(
+            raw_dir,
+            raw_gpkg,
+            start_date=date(year, 1, 1),
+            end_date=date(year + 1, 1, 1),
+        )
+
+        logger.info(f"downloading MTA Turnstile Data {year}")
+        ts.download_raw()
+
+        logger.info(f"initializing MTA geopackage {year}")
+        ts.setup_gpkg(remote_lookup_csv, stations_csv, replace=True, crs=2263)
+
+        logger.info(f"processing turnstile data {year}")
+        ts.raw_to_gpkg()
+
+        # move to prepared data
+        prepared_gpkg = project_dir.joinpath("data", "prepared", f"mta_{year}.gpkg")
+        if prepared_gpkg.exists():
+            prepared_gpkg.unlink()
+
+        raw_gpkg.rename(prepared_gpkg)
+
+
 def make_all(project_dir, logger):
     make_open_data(project_dir, logger)
     make_census_pop(project_dir, logger)
     make_gbfs_stations(project_dir, logger)
     make_gbfs_status(project_dir, logger)
     make_sas_infill(project_dir, logger)
+    make_mta_turnstile(project_dir, logger)
 
 
 @click.group()
@@ -123,6 +161,12 @@ def get_acs_population(ctx):
 @click.pass_context
 def get_sas_infill(ctx):
     make_sas_infill(ctx.obj["project_dir"], logger=ctx.obj["logger"])
+
+
+@cli.command(help="Get MTA Turnstile Records")
+@click.pass_context
+def get_mta_turnstile(ctx):
+    make_mta_turnstile(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
 @cli.command(help="Get all datasets")
