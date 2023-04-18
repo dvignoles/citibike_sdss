@@ -6,7 +6,7 @@ import importlib
 
 
 # Define sources (doing so separately from open_data_sources() allows
-# flexibility in which sources to include) 
+# flexibility in which sources to include)
 census_tracts_geom = util.OpenDataSource(
     name="census_geom",
     data_url="https://data.cityofnewyork.us/resource/i69b-3rdj.geojson",
@@ -36,8 +36,8 @@ census_nta = util.OpenDataSource(
     description="Aggregated population for NYC Neighborhood Tabulation Areas.",
     data_url="https://data.cityofnewyork.us/resource/rnsn-acs2.geojson",
     info_url="https://data.cityofnewyork.us/City-Government/Census-Demographics-at-the-Neighborhood-Tabulation/rnsn-acs2",
-    epsg=4326
-    )
+    epsg=4326,
+)
 
 # Bike routes
 bike_routes = util.OpenDataSource(
@@ -80,7 +80,15 @@ motor_vehicle_crashes = util.OpenDataSource(
 def open_data_sources():
     """Constructs SourceDict of open data sources for Citi Bike SDSS."""
     sources = util.SourceDict(
-        [census_acs_pop, bike_routes, streets, boroughs, motor_vehicle_crashes, subways, census_nta]
+        [
+            census_acs_pop,
+            bike_routes,
+            streets,
+            boroughs,
+            motor_vehicle_crashes,
+            subways,
+            census_nta,
+        ]
     )
     return sources
 
@@ -109,9 +117,27 @@ def clean_open_data(data_dict):
 
     print("Cleaning open data...")
 
+    # Filter and clip motor vehicles layer
+    gdf_dict["motor_vehicle_crashes"] = clean_motor_vehicles(
+        gdf=gdf_dict["motor_vehicle_crashes"], mask=gdf_dict["boroughs"]
+    )
+
+    # Rename ACS population column
+    gdf_dict["acs_population"].rename(
+        columns={"B01003_001E": "population"}, inplace=True
+    )
+
+    # Clip census population layer
+    print("Clipping census population layer...")
+    gdf_dict["acs_population"] = gp.clip(gdf_dict["acs_population"], gdf_dict["boroughs"])
+
+    print("Data cleaning complete.\n")
+
+
+def clean_motor_vehicles(gdf, mask):
+
     # Motor vehicle layer processing
     print("Filtering motor vehicles layer...")
-    mv = "motor_vehicle_crashes"
 
     # Keep only useful columns
     keep = [
@@ -124,7 +150,8 @@ def clean_open_data(data_dict):
         "longitude",
         "borough",
     ]
-    gdf_dict[mv] = gdf_dict[mv][keep]
+
+    gdf = gdf[keep]
 
     # Change numeric columns to numeric types
     to_num = [
@@ -133,27 +160,17 @@ def clean_open_data(data_dict):
         "latitude",
         "longitude",
     ]
+
     for col in to_num:
-        gdf_dict[mv][col] = pd.to_numeric(gdf_dict[mv][col])
+        gdf[col] = pd.to_numeric(gdf[col])
 
     # Filter motor vehicle crashes to only include crashes on Jan 1, 2019 or later
-    gdf_dict[mv] = gdf_dict[mv][gdf_dict[mv].crash_date >= "2019-01-01T00:00:00.000"]
+    gdf = gdf[gdf.crash_date >= "2019-01-01T00:00:00.000"]
 
     # Only include crashes in which at least one cyclist was killed or injured
-    gdf_dict[mv] = gdf_dict[mv][
-        (gdf_dict[mv].number_of_cyclist_killed > 0)
-        | (gdf_dict[mv].number_of_cyclist_injured > 0)
-    ]
+    gdf = gdf[(gdf.number_of_cyclist_killed > 0) | (gdf.number_of_cyclist_injured > 0)]
 
-    # Clip filtered GeoDataFrame by the borough boundaries
-    mask = gdf_dict["boroughs"]
-    print("Clipping motor vehicles layer...")
-    gdf_dict[mv] = gp.clip(gdf_dict[mv], mask)
+    # Clip filtered motor vehicles GeoDataFrame by the borough boundaries
+    gdf = gp.clip(gdf, mask)
 
-    print("Clipping census population layer...")
-    census = "acs_population"
-    gdf_dict[census] = gp.clip(gdf_dict[census], mask)
-
-    print("Data cleaning complete.\n")
-
-
+    return gdf
