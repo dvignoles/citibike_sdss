@@ -1,8 +1,9 @@
-import geopandas as gp
-import cenpy
-import requests
-import warnings
 import gzip
+import warnings
+
+import geopandas as gpd
+import requests
+
 
 # Classes for handling sources
 class Source:
@@ -19,68 +20,6 @@ class Source:
         self.name = name
         self.description = description
         self.epsg = epsg
-
-
-class OpenDataSource(Source):
-    """Holds information about a source from NYC Open Data.
-
-    Can also be used for generic API requests that return
-    FeatureCollections.
-
-    Attributes:
-    data_url: the URL from which the data will be downloaded
-    info_url: the URL to a page providing information about the dataset
-    size: the expected maximum size of the dataset (in rows); sets the limit of the API request
-    to_clip: marks a source as in need of clipping
-    """
-
-    def __init__(
-        self,
-        name: str,
-        description: str,
-        data_url: str,
-        info_url: str,
-        epsg: int,
-        size=1000000,
-        to_clip=False,
-    ):
-        self.data_url = data_url
-        self.info_url = info_url
-        self.size = size
-        super().__init__(name=name, description=description, epsg=epsg)
-
-    def get(self):
-        gdf = gdf_from_url(url=self.data_url, limit=self.size)
-        return gdf
-
-
-class CensusSource(Source):
-    """Holds information about a source from the 2019 American Community Survey.
-
-    Attributes:
-    place: Representation of place (e.g. "New York, NY") to pass to cenpy query
-    variables: List of census variable names to pass to cenpy query
-    """
-
-    def __init__(
-        self, name: str, description: str, epsg: int, place: str, variables: list
-    ):
-        self.place = place
-        self.variables = variables
-        super().__init__(name=name, description=description, epsg=epsg)
-
-    def get(self):
-        """Use cenpy to request American Community Census data."""
-        # Set source to ACS 2019 5-year estimates
-        acs = cenpy.products.ACS(2019)
-        # Download data for place name (clipping likely necessary)
-        gdf = acs.from_place(
-            place=self.place,
-            level="tract",
-            variables=self.variables,
-            strict_within=False,
-        )
-        return gdf
 
 
 class SourceDict:
@@ -168,7 +107,6 @@ class DataDict:
     def set_crs(self):
         """Sets the CRS of each GeoDataFrame in self.data by associated Sources."""
         for name in self.source_dict.sources:
-
             source = self.source_dict[name]
             gdf = self.data[name]
             epsg = source.epsg
@@ -240,7 +178,7 @@ def gdf_from_url(url, limit=500000):
     print(f"Downloading data from {url}...")
     response = json_response(url, limit)
     print("Creating GeoDataFrame...")
-    gdf = gp.GeoDataFrame.from_features(response)
+    gdf = gpd.GeoDataFrame.from_features(response)
     print("GeoDataFrame complete.\n")
     return gdf
 
@@ -308,4 +246,3 @@ def urls_to_gpkg(url_dict, path, max_size=500000):
     gdf_dict_to_gpkg(my_gdf_dict, path)
     print(f"GeoPackage written to {path}.")
     return my_gdf_dict
-
