@@ -4,8 +4,8 @@ import util
 
 
 class OpenDataSource(util.Source):
-    """Holds information about a source from NYC Open Data.
 
+    """Holds information about a source from NYC Open Data.
     Can also be used for generic API requests that return
     FeatureCollections.
 
@@ -160,16 +160,7 @@ def clean_open_data(data_dict):
         gdf=gdf_dict["motor_vehicle_crashes"], mask=gdf_dict["boroughs"]
     )
 
-    # Rename ACS population column
-    gdf_dict["acs_population"].rename(
-        columns={"B01003_001E": "population"}, inplace=True
-    )
-
-    # Clip census population layer
-    print("Clipping census population layer...")
-    gdf_dict["acs_population"] = gp.clip(gdf_dict["acs_population"], gdf_dict["boroughs"])
-
-    print("Data cleaning complete.\n")
+    print("Open data cleaning complete.\n")
 
 
 def clean_motor_vehicles(gdf, mask):
@@ -209,6 +200,6 @@ def clean_motor_vehicles(gdf, mask):
     gdf = gdf[(gdf.number_of_cyclist_killed > 0) | (gdf.number_of_cyclist_injured > 0)]
 
     # Clip filtered motor vehicles GeoDataFrame by the borough boundaries
-    gdf = gp.clip(gdf, mask)
+    gdf = gpd.clip(gdf, mask)
 
     return gdf
