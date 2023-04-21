@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import acs
+import citibike
 import click
 import gbfs
 import geopandas as gpd
@@ -114,6 +115,27 @@ def make_mta_turnstile(project_dir, logger):
         raw_gpkg.rename(prepared_gpkg)
 
 
+def make_citibike_trips(project_dir, logger):
+    today = date.today()
+    prepared_dir = project_dir.joinpath("data", "prepared")
+    if not prepared_dir.exists():
+        prepared_dir.mkdir(parents=True)
+
+    # TODO: Parameterize year range
+    for year in range(2019, today.year + 1):
+        raw_dir = project_dir.joinpath("data", "raw", "cb_tripdata", str(year))
+        if not raw_dir.exists():
+            raw_dir.mkdir(parents=True)
+
+        year_gpkg = prepared_dir.joinpath(f"citibike_trips_{year}.gpkg")
+        end_month = today.month - 1 if year == today.year else 12
+        td = citibike.TripData(raw_dir, year_gpkg, year, 1, year, end_month)
+        logger.info(f"downloading Citi Bike trip data {year}")
+        td.download_raw()
+        logger.info(f"preparing Citi Bike trip data {year}")
+        td.to_gpkg(replace=True, crs=2263)
+
+
 def make_all(project_dir, logger):
     make_open_data(project_dir, logger)
     make_census_pop(project_dir, logger)
@@ -121,6 +143,7 @@ def make_all(project_dir, logger):
     make_gbfs_status(project_dir, logger)
     make_sas_infill(project_dir, logger)
     make_mta_turnstile(project_dir, logger)
+    make_citibike_trips(project_dir, logger)
 
 
 @click.group()
@@ -167,6 +190,12 @@ def get_sas_infill(ctx):
 @click.pass_context
 def get_mta_turnstile(ctx):
     make_mta_turnstile(ctx.obj["project_dir"], logger=ctx.obj["logger"])
+
+
+@cli.command(help="Get Citi Bike Trip Data")
+@click.pass_context
+def get_citibike_trips(ctx):
+    make_citibike_trips(ctx.obj["project_dir"], logger=ctx.obj["logger"])
 
 
 @cli.command(help="Get all datasets")
