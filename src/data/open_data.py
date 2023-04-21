@@ -4,8 +4,8 @@ import util
 
 
 class OpenDataSource(util.Source):
-    """Holds information about a source from NYC Open Data.
 
+    """Holds information about a source from NYC Open Data.
     Can also be used for generic API requests that return
     FeatureCollections.
 
@@ -155,9 +155,18 @@ def clean_open_data(data_dict):
 
     print("Cleaning open data...")
 
+    # Filter and clip motor vehicles layer
+    gdf_dict["motor_vehicle_crashes"] = clean_motor_vehicles(
+        gdf=gdf_dict["motor_vehicle_crashes"], mask=gdf_dict["boroughs"]
+    )
+
+    print("Open data cleaning complete.\n")
+
+
+def clean_motor_vehicles(gdf, mask):
+
     # Motor vehicle layer processing
     print("Filtering motor vehicles layer...")
-    mv = "motor_vehicle_crashes"
 
     # Keep only useful columns
     keep = [
@@ -170,7 +179,8 @@ def clean_open_data(data_dict):
         "longitude",
         "borough",
     ]
-    gdf_dict[mv] = gdf_dict[mv][keep]
+
+    gdf = gdf[keep]
 
     # Change numeric columns to numeric types
     to_num = [
@@ -179,21 +189,17 @@ def clean_open_data(data_dict):
         "latitude",
         "longitude",
     ]
+
     for col in to_num:
-        gdf_dict[mv][col] = pd.to_numeric(gdf_dict[mv][col])
+        gdf[col] = pd.to_numeric(gdf[col])
 
     # Filter motor vehicle crashes to only include crashes on Jan 1, 2019 or later
-    gdf_dict[mv] = gdf_dict[mv][gdf_dict[mv].crash_date >= "2019-01-01T00:00:00.000"]
+    gdf = gdf[gdf.crash_date >= "2019-01-01T00:00:00.000"]
 
     # Only include crashes in which at least one cyclist was killed or injured
-    gdf_dict[mv] = gdf_dict[mv][
-        (gdf_dict[mv].number_of_cyclist_killed > 0)
-        | (gdf_dict[mv].number_of_cyclist_injured > 0)
-    ]
+    gdf = gdf[(gdf.number_of_cyclist_killed > 0) | (gdf.number_of_cyclist_injured > 0)]
 
-    # Clip filtered GeoDataFrame by the borough boundaries
-    mask = gdf_dict["boroughs"]
-    print("Clipping motor vehicles layer...")
-    gdf_dict[mv] = gpd.clip(gdf_dict[mv], mask)
+    # Clip filtered motor vehicles GeoDataFrame by the borough boundaries
+    gdf = gpd.clip(gdf, mask)
 
-    print("Data cleaning complete.\n")
+    return gdf
