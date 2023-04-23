@@ -44,11 +44,14 @@ def get_census_acs_pop(crs=2263, mask=None):
 
     census_acs_pop.to_crs(crs, inplace=True)
 
-    census_acs_pop.rename(
-        columns={"B01003_001E": "population"}, inplace=True
-    )
+    census_acs_pop.rename(columns={"B01003_001E": "population"}, inplace=True)
 
     if mask is not None:
         census_acs_pop = gpd.clip(census_acs_pop, mask)
 
+    census_acs_pop['area'] = census_acs_pop['geometry'].area
+
+    # Remove post-clip sliver polygons with area < .01 sq mi 
+    census_acs_pop = census_acs_pop[census_acs_pop.area > 278784]
+    
     return census_acs_pop
