@@ -1,0 +1,55 @@
+#! /usr/bin/bash
+
+grass --tmp-location EPSG:2263 
+
+# Import with snapping to within .00001 ft
+# NYC Open Data
+v.import /home/ian/Documents/projects/bike_lanes/citibike_sdss/data/prepared/open_data.gpkg --overwrite snap=1e-05
+# Census population
+v.import /home/ian/Documents/projects/bike_lanes/citibike_sdss/data/prepared/acs.gpkg --overwrite snap=1e-05
+# Citi Bike stations
+v.import -o /home/ian/Documents/projects/bike_lanes/citibike_sdss/data/prepared/gbfs.gpkg layer=station --overwrite snap=1e-05
+
+# Add column for population per 100 sqft
+v.db.addcolumn map=acs column='pop_per_100sqft real'
+v.db.update map=acs column=pop_per_100sqft query_column='population * 100 / area'
+
+v.to.rast input=acs type=area output=population_raster use=attr attribute_column=pop_per_100sqft --overwrite
+
+v.rast.stats map=acs raster=population_raster method=sum column=raster_pop
+
+# Create column to check difference between vector and raster population numbers
+# Difference is within +/- 10 people, mean is .03, and std. dev. is ~1
+v.db.addcolumn map=acs column='pop_diff real'
+v.db.update map=acs column=pop_diff query_column='population - raster_pop_sum'
+
+r.out.gdal input=population_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/population.gtiff
+
+
+###################################
+# Convert vector layers to rasters #
+###################################
+
+### Bike lanes ###
+# Add value column (always equal to 1) for value of raster
+v.db.addcolumn bike_routes column="value integer"
+v.db.update bike_routes column=value value=1
+
+# Create raster
+v.to.rast input=bike_routes type=line output=bike_lane_raster use=attr attribute_column=value --overwrite
+r.out.gdal input=bike_lane_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/bike_lanes.gtiff --overwrite
+
+########
+# GBFS #
+########
+# Add value column (always equal to 1) for value of raster
+v.db.addcolumn station column="value integer"
+v.db.update station column=value value=1
+
+# Create raster
+v.to.rast input=station type=point output=gbfs_raster use=attr attribute_column=value --overwrite
+r.out.gdal input=gbfs_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/gbfs_raster.gtiff --overwrite
+
+# Create raster of distance from stations
+r.grow.distance input=gbfs_raster distance=station_distance metric=euclidean --overwrite
+r.out.gdal input=station_distance output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/station_distance.gtiff
