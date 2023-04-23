@@ -19,6 +19,14 @@ GBFS_GPKG = "data/prepared/gbfs.gpkg"
 SAS_GPKG = "data/prepared/sas.gpkg"
 
 
+def _get_boroughs_mask(project_dir):
+    """Return gdf of NYC boroughs for masking purposes"""
+    if project_dir.joinpath(OPEN_DATA_GPKG).exists():
+        return gpd.read_file(project_dir.joinpath(OPEN_DATA_GPKG), layer="boroughs")
+    else:
+        return open_data.boroughs().get().set_crs(4326).to_crs(2263)
+
+
 def make_open_data(project_dir, logger=None):
     if logger is not None:
         logger.info("downloading NYC Open Data")
@@ -42,11 +50,7 @@ def make_census_pop(project_dir, logger=None):
     if logger is not None:
         logger.info("downloading ACS Census population")
 
-    if project_dir.joinpath(OPEN_DATA_GPKG).exists():
-        mask = gpd.read_file(project_dir.joinpath(OPEN_DATA_GPKG), layer="boroughs")
-    else:
-        mask = open_data.boroughs().get().set_crs(4326).to_crs(2263)
-
+    mask = _get_boroughs_mask(project_dir)
     gdf = acs.get_census_acs_pop(crs=2263, mask=mask)
 
     gdf.to_file(project_dir.joinpath(ACS_GPKG))
@@ -56,11 +60,14 @@ def make_gbfs_stations(project_dir, logger=None):
     if logger is not None:
         logger.info("downloading Citi Bike GBFS Station Information")
 
+    mask = _get_boroughs_mask(project_dir)
     stations = gbfs.Stations()
     stations._download_raw(
         output_file=project_dir.joinpath("data/raw/station_info.json.gz")
     )
-    stations.process(output_file=project_dir.joinpath(GBFS_GPKG))
+    stations.process(
+        output_file=project_dir.joinpath(GBFS_GPKG), mask=mask, replace=True
+    )
 
 
 def make_gbfs_status(project_dir, logger):

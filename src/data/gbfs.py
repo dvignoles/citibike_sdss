@@ -25,7 +25,7 @@ class Stations:
         self.raw_file = util.download_file(self.url, output_file, compress=True)
         return self.raw_file
 
-    def process(self, output_file, mode="w"):
+    def process(self, output_file, mode="w", mask=None, replace=False):
         """process into geodataframe/geopackage"""
 
         used_tempfile = False
@@ -35,6 +35,9 @@ class Stations:
             raw_file = tempfile.NamedTemporaryFile(suffix=".json.gz")
             self._download_raw(output_file=raw_file.name)
             used_tempfile = True
+
+        if output_file.exists() and replace:
+            output_file.unlink()
 
         # convert json dicts to geodataframe
         with gzip.open(self.raw_file, "rt") as f:
@@ -72,6 +75,9 @@ class Stations:
         )
         # to long island state plane
         gdf.to_crs("EPSG:2263", inplace=True)
+
+        if mask is not None:
+            gdf = gpd.clip(gdf, mask)
 
         # save to file
         gdf.to_file(output_file, layer="station", mode=mode, crs="EPSG:2263")
