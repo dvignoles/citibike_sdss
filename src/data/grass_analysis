@@ -1,5 +1,9 @@
 #! /usr/bin/bash
 
+################################
+# Start grass and import files #
+################################
+
 grass --tmp-location EPSG:2263 
 
 # Import with snapping to within .00001 ft
@@ -9,6 +13,34 @@ v.import /home/ian/Documents/projects/bike_lanes/citibike_sdss/data/prepared/ope
 v.import /home/ian/Documents/projects/bike_lanes/citibike_sdss/data/prepared/acs.gpkg --overwrite snap=1e-05
 # Citi Bike stations
 v.import -o /home/ian/Documents/projects/bike_lanes/citibike_sdss/data/prepared/gbfs.gpkg layer=station --overwrite snap=1e-05
+
+##########################################
+# Set calculation region and raster mask #
+##########################################
+
+# Set calcluation region to borough vector file
+# This also sets the raster resolution: res=10 means 10ft x 10ft cells 
+g.region vector=boroughs res=10
+
+# Add value column (always equal to 1) for value of raster
+v.db.addcolumn boroughs column="value integer"
+v.db.update boroughs column=value value=1
+
+# Create raster
+v.to.rast input=boroughs type=area output=boroughs_raster use=attr attribute_column=value --overwrite
+r.out.gdal input=boroughs_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/boroughs_raster.gtiff --overwrite
+
+# Boroughs raster serves as a raster mask for subsequent calculations
+# This avoids calculating raster cells on the water or outside NYC 
+
+# Set mask
+r.mask raster=boroughs_raster
+
+####################################
+# Convert vector layers to rasters #
+####################################
+
+### ACS population ###
 
 # Add column for population per 100 sqft
 v.db.addcolumn map=acs column='pop_per_100sqft real'
@@ -23,25 +55,21 @@ v.rast.stats map=acs raster=population_raster method=sum column=raster_pop
 v.db.addcolumn map=acs column='pop_diff real'
 v.db.update map=acs column=pop_diff query_column='population - raster_pop_sum'
 
+# Write population raster file
 r.out.gdal input=population_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/population.gtiff
 
-
-###################################
-# Convert vector layers to rasters #
-###################################
-
 ### Bike lanes ###
+
 # Add value column (always equal to 1) for value of raster
 v.db.addcolumn bike_routes column="value integer"
 v.db.update bike_routes column=value value=1
 
 # Create raster
-v.to.rast input=bike_routes type=line output=bike_lane_raster use=attr attribute_column=value --overwrite
-r.out.gdal input=bike_lane_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/bike_lanes.gtiff --overwrite
+v.to.rast input=bike_routes type=line output=bike_routes_raster use=attr attribute_column=value --overwrite
+r.out.gdal input=bike_routes_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/bike_lanes.gtiff --overwrite
 
-########
-# GBFS #
-########
+### GBFS ###
+
 # Add value column (always equal to 1) for value of raster
 v.db.addcolumn station column="value integer"
 v.db.update station column=value value=1
@@ -50,6 +78,85 @@ v.db.update station column=value value=1
 v.to.rast input=station type=point output=gbfs_raster use=attr attribute_column=value --overwrite
 r.out.gdal input=gbfs_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/gbfs_raster.gtiff --overwrite
 
-# Create raster of distance from stations
+
+### Streets ###
+# Convert character column rw_type to new integer column street_type
+v.db.addcolumn streets column="street_type integer"
+v.db.update streets column=street_type query_col=rw_type
+
+# Create raster from street_type
+v.to.rast input=streets type=line output=streets_raster use=attr attribute_column=street_type --overwrite
+
+# Reclassify streets raster to exclude highways, bridges, tunnels, etc.
+# See streets metadata doc in citbike_sdss/references for all codes
+echo "1 3 5 6 7 10 11 13 = 1
+2 4 8 9 12 14 = NULL" | 
+    r.reclass input=streets_raster output=bikeable_streets_raster rules=- --overwrite
+
+r.out.gdal input=bikeable_streets_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/bikeable_streets_raster.gtiff --overwrite
+
+
+###########################
+# Create distance rasters #
+###########################
+# Distance from Citi Bike stations
 r.grow.distance input=gbfs_raster distance=station_distance metric=euclidean --overwrite
-r.out.gdal input=station_distance output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/station_distance.gtiff
+r.out.gdal input=station_distance output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/station_distance.gtiff --overwrite
+ 
+# Calculate current distances between each station and its closest neighbor
+v.db.addcolumn station column="distance_to_nearest real"
+v.distance from=station from_type=point to=station to_type=point dmin=.00001 upload=dist column=distance_to_nearest
+
+# Results for distance b/w existing stations	
+# minimum: 130.92 ft			        
+# maximum: 2486.95 ft			        
+# mean: 684.814 ft				
+
+# Calculate constraint raster based on distance: minimum 100 ft, maxmium 2640 ft (half a mile)
+# Note: rules=- means read the rules from standard input; otherwise a file is specified
+# Note: r.reclass does not make a real raster, just a reclassification table that is called on the original raster every time the user accesses the reclassified "raster".
+echo "0 thru 100 = 0
+101 thru 2640 = 1
+2640 thru 9999999 = 0" |
+    r.reclass input=station_distance output=station_distance_constraint rules=-
+    
+r.out.gdal input=station_distance_constraint output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/station_distance_constraint.gtiff --overwrite
+
+
+# Get distance to nearest bikeable street for each existing station
+v.db.addcolumn station column="distance_to_nearest_street real"
+v.what.rast map=station raster=bikeable_streets_distance column=distance_to_nearest_street --overwrite
+v.out.ogr input=station output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/stations_with_distance.gpkg --overwrite
+# 99.5% quantile for existing stations' distance to bikeable street is 60 ft
+# Can use 60 ft around bikeable streets for constraint layer
+
+# Calculate raster for distance to closest street
+# Note: could refine by excluding highways
+r.grow.distance input=bikeable_streets_raster distance=bikeable_streets_distance metric=euclidean --overwrite
+
+echo "0 thru 60 = 1
+61 thru 9999999 = 0" |
+    r.reclass input=bikeable_streets_distance output=bikeable_streets_distance_constraint rules=- --overwrite
+
+r.out.gdal input=bikeable_streets_distance_constraint output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/bikeable_streets_distance_constraint.gtiff --overwrite
+
+### Distance from bike routes ###
+r.grow.distance input=bike_routes_raster distance=bike_routes_distance metric=euclidean --overwrite
+r.out.gdal input=station_distance output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/station_distance.gtiff --overwrite
+
+echo "0 thru 60 = 1
+61 thru 9999999 = 0" |
+    r.reclass input=bike_routes_distance output=bike_routes_distance_constraint rules=- --overwrite
+r.out.gdal input=bike_routes_distance_constraint output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/bike_routes_distance_constraint.gtiff --overwrite
+
+r.mapcalc "constraint = bikeable_streets_distance_constraint * station_distance_constraint"
+r.out.gdal input=constraint output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/constraint.gtiff --overwrite
+
+
+# Analysis of overlap between bike_routes_distance_constraint and
+# bikeable_streets_distance_constraint showed that there was about .03
+# mi additional area included when adding
+# bikeable_streets_distance_constraint. However, visual inspection
+# showed that this additional area was just additional cells along the
+# edges of the existing areas, so bikeable_streets_distance_constraint
+# does not need to be added to bikeable_streets_distance_constraint.
