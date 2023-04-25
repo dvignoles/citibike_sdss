@@ -4,7 +4,7 @@
 # Start grass and import files #
 ################################
 
-grass --tmp-location EPSG:2263 
+grass --tmp-location EPSG:2263
 
 # Import with snapping to within .00001 ft
 # NYC Open Data
@@ -40,23 +40,40 @@ r.mask raster=boroughs_raster
 # Convert vector layers to rasters #
 ####################################
 
-### ACS population ###
-
-# Add column for population per 100 sqft
+### ACS population (10x10) ###
+g.region vector=boroughs res=10
 v.db.addcolumn map=acs column='pop_per_100sqft real'
 v.db.update map=acs column=pop_per_100sqft query_column='population * 100 / area'
+v.to.rast input=acs type=area output=population_raster_10x10 use=attr attribute_column=pop_per_100sqft --overwrite
+v.rast.stats map=acs raster=population_raster_10x10 method=sum column_prefix=raster_10x10_pop -c
+r.out.gdal input=population_raster_10x10 output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/population_10x10.gtiff
 
-v.to.rast input=acs type=area output=population_raster use=attr attribute_column=pop_per_100sqft --overwrite
+### ACS population (100x100) ###
+g.region vector=boroughs res=100
+v.db.addcolumn map=acs column='pop_per_10000sqft real'
+v.db.update map=acs column=pop_per_10000sqft query_column='population * 10000 / area'
+v.to.rast input=acs type=area output=population_raster_100x100 use=attr attribute_column=pop_per_10000sqft --overwrite
+v.rast.stats map=acs raster=population_raster_100x100 method=sum column_prefix=raster_100x100_pop -c
+r.out.gdal input=population_raster_100x100 output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/population_100x100.gtiff
 
-v.rast.stats map=acs raster=population_raster method=sum column=raster_pop
+### ACS population (1000x1000) ###
+g.region vector=boroughs res=1000
+v.db.addcolumn map=acs column='pop_per_million_sqft real'
+v.db.update map=acs column=pop_per_million_sqft query_column='population * 1000000 / area'
+v.to.rast input=acs type=area output=population_raster_1000x1000 use=attr attribute_column=pop_per_million_sqft --overwrite
+v.rast.stats map=acs raster=population_raster_1000x1000 method=sum column_prefix=raster_1000x1000_pop -c
+r.out.gdal input=population_raster_1000x1000 output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/population1000x1000.gtiff --overwrite
 
-# Create column to check difference between vector and raster population numbers
+# Create columns to check difference between vector and raster population numbers
 # Difference is within +/- 10 people, mean is .03, and std. dev. is ~1
-v.db.addcolumn map=acs column='pop_diff real'
-v.db.update map=acs column=pop_diff query_column='population - raster_pop_sum'
+v.db.addcolumn map=acs column='pop_diff_10x10 real'
+v.db.update map=acs column=pop_diff_10x10 query_column='population - raster_10x10_pop_sum'
 
-# Write population raster file
-r.out.gdal input=population_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/population.gtiff
+v.db.addcolumn map=acs column='pop_diff_100x100 real'
+v.db.update map=acs column=pop_diff_100x100 query_column='population - raster_100x100_pop_sum'
+
+v.db.addcolumn map=acs column='pop_diff_1000x1000 real'
+v.db.update map=acs column=pop_diff_1000x1000 query_column='population - raster_10x10_pop_sum'
 
 ### Bike lanes ###
 
@@ -70,12 +87,13 @@ r.out.gdal input=bike_routes_raster output=/home/ian/Documents/projects/bike_lan
 
 ### GBFS ###
 
-# Add value column (always equal to 1) for value of raster
-v.db.addcolumn station column="value integer"
-v.db.update station column=value value=1
+# # Add value column (always equal to 1) for value of raster
+# v.db.addcolumn station column="value integer"
+# v.db.update station column=value value=1
 
 # Create raster
-v.to.rast input=station type=point output=gbfs_raster use=attr attribute_column=value --overwrite
+g.region vector=boroughs res=10
+v.to.rast input=station type=point output=gbfs_raster use=attr attribute_column=capacity --overwrite
 r.out.gdal input=gbfs_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/gbfs_raster.gtiff --overwrite
 
 
@@ -160,3 +178,21 @@ r.out.gdal input=constraint output=/home/ian/Documents/projects/bike_lanes/citib
 # showed that this additional area was just additional cells along the
 # edges of the existing areas, so bikeable_streets_distance_constraint
 # does not need to be added to bikeable_streets_distance_constraint.
+
+#####################################################
+# Population within half-mile radius of each point  #
+#####################################################
+r.neighbors -c input=population_raster_100x100 output=population_served method=sum size=53
+
+#########################################################
+# Number of docks within half-mile radius of each point #
+#########################################################
+g.region vector=boroughs res=100
+r.resamp.stats input=gbfs_raster method=sum output=gbfs_raster_100x100 --overwrite
+r.out.gdal input=gbfs_raster_100x100 output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/gbfs_raster_100x100.gtiff --overwrite
+
+r.neighbors -c input=gbfs_100x100 output=docks_in_range method=sum size=53 --overwrite
+r.out.gdal input=docks_in_range output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/docks_in_range.gtiff --overwrite
+
+r.mapcalc "service_area_docks_per_person = docks_in_range / population_served"
+r.out.gdal input=service_area_docks_per_person output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/service_area_docks_per_person.gtiff --overwrite
