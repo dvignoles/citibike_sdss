@@ -60,6 +60,17 @@ def subways():
     return src
 
 
+def nta():
+    src = OpenDataSource(
+        name="nta",
+        description="Aggregated population for NYC Neighborhood Tabulation Areas.",
+        data_url="https://data.cityofnewyork.us/resource/9nt8-h7nd.geojson",
+        info_url="https://data.cityofnewyork.us/City-Government/2020-Neighborhood-Tabulation-Areas-NTAs-Tabular/9nt8-h7nd",
+        epsg=4326,
+    )
+    return src
+
+
 def census_nta():
     src = OpenDataSource(
         name="census_nta",
@@ -126,6 +137,7 @@ def open_data_sources():
             motor_vehicle_crashes(),
             subways(),
             census_nta(),
+            nta(),
         ]
     )
     return sources
@@ -164,7 +176,6 @@ def clean_open_data(data_dict):
 
 
 def clean_motor_vehicles(gdf, mask):
-
     # Motor vehicle layer processing
     print("Filtering motor vehicles layer...")
 
