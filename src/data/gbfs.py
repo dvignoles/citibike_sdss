@@ -198,6 +198,7 @@ class StationStatus:
             "reported_minute INTEGER, "
             "reported_second INTEGER, "
             "reported_weekday INTEGER, "
+            "stale BOOLEAN CHECK (stale IN (0,1)),"
             "FOREIGN KEY(station_id) REFERENCES station(station_id)"
             ")"
         )
@@ -235,6 +236,32 @@ class StationStatus:
     def _filter_obs(self, after):
         self.observations = list(filter(lambda obs: obs[0] > after, self.observations))
 
+    def _set_stale(self, con):
+        """Set stale boolean (non-updates) attribute using rolling window"""
+
+        sql = """
+            with hours_dif AS (
+                SELECT
+                objectid,
+                station_id,
+                reported_datetime,
+                (JulianDay(reported_datetime) - JulianDay(lag(reported_datetime, 1) OVER w)) * 24.0 as hours_difference
+                FROM status
+                WINDOW w AS (Partition BY station_id ORDER BY reported_datetime)
+            ),
+            staleness AS (
+                SELECT
+                objectid,
+                CASE WHEN hours_difference = 0 THEN 1 ELSE 0 END as stale
+                FROM hours_dif
+            )
+            UPDATE status
+            SET
+            stale = (SELECT stale FROM staleness WHERE staleness.objectid = status.objectid)
+        """
+        con.execute(sql)
+        con.commit()
+
     def process(self):
         assert self.output_file.exists(), "gpkg does not exist"
 
@@ -259,7 +286,97 @@ class StationStatus:
                 )
                 df.to_sql("status", con, if_exists="append", index=False)
                 count += 1
+            self._set_stale(con)
             return count
+
+    def _peak_summary(self, con, peak=True):
+        peak_where = "WHERE (reported_weekday BETWEEN 0 AND 4) AND reported_hour IN (6,7,8,9,16,17,18,19) AND stale = 0 AND station.station_id in (SELECT station_id FROM not_stale)"
+        offpeak_where = "WHERE (reported_hour NOT IN (6,7,8,9,16,17,18,19) OR reported_weekday BETWEEN 5 AND 6) AND stale = 0 AND station.station_id in (SELECT station_id FROM not_stale)"
+        where = peak_where if peak else offpeak_where
+        table = "status_peak_summary" if peak else "status_offpeak_summary"
+
+        sql = f"""
+            CREATE TABLE IF NOT EXISTS {table} AS
+            WITH not_stale AS(
+                SELECT
+                station_id,
+                COUNT(CASE WHEN stale = 1 THEN 1 ELSE NULL END) *1.0 / COUNT(*)*1.0 as stale_percent
+                FROM status
+                GROUP BY station_id
+                HAVING stale_percent < 0.70
+                ORDER BY stale_percent DESC
+            ),
+            rush AS (
+                SELECT
+                    station.fid as station_fid,
+                    station.station_id as station_id,
+                    num_bikes_available,
+                    num_docks_available,
+                    num_bikes_available*1.0 / (station.capacity*1.0) AS perc_capacity_available,
+                    num_bikes_available*1.0 / ((num_docks_available + num_bikes_available)*1.0) AS perc_enabled_available,
+                    num_ebikes_available,
+                    reported_datetime,
+                    reported_year,
+                    reported_month,
+                    reported_day,
+                    reported_hour,
+                    reported_minute,
+                    reported_weekday
+                FROM status JOIN station on station.station_id = status.station_id
+                {where}
+            ),
+            totals AS (
+                SELECT station_fid, station_id,
+                COUNT(*) as total,
+                round(AVG(perc_capacity_available), 3) as avg_perc_capacity_available,
+                round(AVG(perc_enabled_available), 3) as avg_perc_enabled_available,
+                SUM(CASE WHEN perc_capacity_available = 0.0 THEN 1 else 0 end) as count_0,
+                SUM(CASE WHEN perc_capacity_available <= 0.10 THEN 1 else 0 end) as count_10,
+                SUM(CASE WHEN perc_capacity_available <= 0.25 THEN 1 else 0 end) as count_25,
+                SUM(CASE WHEN perc_capacity_available <= 0.50 THEN 1 else 0 end) as count_lt50,
+                SUM(CASE WHEN perc_capacity_available >= 0.50 THEN 1 else 0 end) as count_gt50,
+                SUM(CASE WHEN perc_capacity_available >= 0.75 THEN 1 else 0 end) as count_gt75,
+                SUM(CASE WHEN perc_capacity_available >= 0.90 THEN 1 else 0 end) as count_gt90,
+                SUM(CASE WHEN perc_capacity_available = 100 THEN 1 else 0 end) as count_100,
+                SUM(CASE WHEN perc_enabled_available = 0.0 THEN 1 else 0 end) as counte_0,
+                SUM(CASE WHEN perc_enabled_available <= 0.10 THEN 1 else 0 end) as counte_10,
+                SUM(CASE WHEN perc_enabled_available <= 0.25 THEN 1 else 0 end) as counte_25,
+                SUM(CASE WHEN perc_enabled_available <= 0.50 THEN 1 else 0 end) as counte_lt50,
+                SUM(CASE WHEN perc_enabled_available >= 0.50 THEN 1 else 0 end) as counte_gt50,
+                SUM(CASE WHEN perc_enabled_available >= 0.75 THEN 1 else 0 end) as counte_gt75,
+                SUM(CASE WHEN perc_enabled_available >= 0.90 THEN 1 else 0 end) as counte_gt90,
+                SUM(CASE WHEN perc_enabled_available = 100 THEN 1 else 0 end) as counte_100
+                FROM rush
+                GROUP BY station_fid, station_id
+            )
+            SELECT
+                station_fid, station_id,
+                avg_perc_capacity_available,
+                avg_perc_enabled_available,
+                round(count_0*1.0 / total*1.0, 3) AS capacity_available_eq_0percent,
+                round(count_10*1.0 / total*1.0, 3) AS capacity_available_lt_10percent,
+                round(count_25*1.0 / total*1.0, 3) AS capacity_available_lt_25percent,
+                round(count_lt50*1.0 / total*1.0, 3) AS capacity_available_lt_50percent,
+                round(count_gt50*1.0 / total*1.0, 3) AS capacity_available_gt_50percent,
+                round(count_gt75*1.0 / total*1.0, 3) AS capacity_available_gt_75percent,
+                round(count_gt90*1.0 / total*1.0, 3) AS capacity_available_gt_90percent,
+                round(count_100*1.0 / total*1.0, 3) AS capacity_available_eq_100percent,
+                round(counte_0*1.0 / total*1.0, 3) AS enabled_available_eq_0percent,
+                round(counte_10*1.0 / total*1.0, 3) AS enabled_available_lt_10percent,
+                round(counte_25*1.0 / total*1.0, 3) AS enabled_available_lt_25percent,
+                round(counte_lt50*1.0 / total*1.0, 3) AS enabled_available_lt_50percent,
+                round(counte_gt50*1.0 / total*1.0, 3) AS enabled_available_gt_50percent,
+                round(counte_gt75*1.0 / total*1.0, 3) AS enabled_available_gt_75percent,
+                round(counte_gt90*1.0 / total*1.0, 3) AS enabled_available_gt_90percent,
+                round(counte_100*1.0 / total*1.0, 3) AS enabled_available_eq_100percent
+            FROM totals"""
+        con.execute(sql)
+        con.commit()
+
+    def create_summaries(self):
+        with sqlite3.connect(self.output_file) as con:
+            self._peak_summary(con, peak=True)
+            self._peak_summary(con, peak=False)
 
 
 @click.group()

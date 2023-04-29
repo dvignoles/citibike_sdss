@@ -71,13 +71,18 @@ def make_gbfs_stations(project_dir, logger=None):
 
 
 def make_gbfs_status(project_dir, logger):
-    logger.info("downloading Citi Bike GBFS Station Information")
+    logger.info("processing Citi Bike GBFS Station Status")
 
     output_file = project_dir.joinpath(GBFS_GPKG)
+    if not output_file.exists():
+        make_gbfs_stations(project_dir, logger)
+
     raw_dir = project_dir.joinpath("data/raw/station_status")
     status = gbfs.StationStatus(output_file, raw_dir)
     count = status.process()
     logger.info(f"{count} GBFS captures processed")
+    logger.info("Creating Status Summary tables")
+    status.create_summaries()
 
 
 def make_sas_infill(project_dir, logger):
