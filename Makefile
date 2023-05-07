@@ -22,9 +22,15 @@ else
 HAS_MAMBA=True
 endif
 
+
 #################################################################################
 # COMMANDS                                                                      #
 #################################################################################
+
+CONDA_PREFIX = $(shell conda info -s --json | python3 -c "import sys, json; print(json.load(sys.stdin)['conda_prefix'])")
+create_dot_env:
+	echo "CONDA_PREFIX=$(CONDA_PREFIX)" > .env
+	echo "CONDA_ACTIVE_PREFIX=$(CONDA_PREFIX)/envs/$(PROJECT_NAME)" >> .env
 
 ## Install Python Dependencies
 dev_requirements: test_environment

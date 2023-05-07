@@ -18,6 +18,9 @@ conda activate citibike_sdss
 # install python developer dependencies
 make dev_requirements
 
+# create .env project config file at root
+make create_dot_env
+
 # configure aws access
 aws configure
 

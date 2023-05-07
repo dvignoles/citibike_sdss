@@ -12,3 +12,4 @@ dependencies:
   - beautifulsoup4
   - ipykernel
   - cenpy
+  - qgis=3.30.2
