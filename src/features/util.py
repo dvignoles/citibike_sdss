@@ -11,9 +11,13 @@ def qgis_context(qgis_path):
     # Create a reference to the QgsApplication.  Setting the
     # second argument to False disables the GUI.
     qgs = QgsApplication([], False)
-
-    # Load providers
     qgs.initQgis()
+
+    from providers import CustomAlgorithmProvider
+
+    custom_provider = CustomAlgorithmProvider()
+    custom_provider.loadAlgorithms()
+    qgs.processingRegistry().addProvider(custom_provider)
 
     from processing.core.Processing import Processing
     from qgis import processing
