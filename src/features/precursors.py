@@ -1,13 +1,12 @@
-from pathlib import Path
-
+"""Precursor metrics (Reasonable walking distance, residential neighborhood, etc...)"""
 import util
 
 
-def residential_neighborhood(project_dir):
+def residential_neighborhood(output_gpkg, project_dir):
     with util.qgis_context("/usr") as processing:
         output_gpkg = project_dir / "data/interim/precursors.gpkg"
         processing.run(
-            "my_provider:nta_residential",
+            "custom_provider:nta_residential",
             {
                 "annual_turnstile_means": str(
                     project_dir
@@ -20,7 +19,3 @@ def residential_neighborhood(project_dir):
                 "Nta_residential": f"ogr:dbname='{output_gpkg}' table=\"nta_residential\" (geom)",
             },
         )
-
-
-if __name__ == "__main__":
-    residential_neighborhood(Path("/home/dan/devel/citibike_sdss"))

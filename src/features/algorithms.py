@@ -102,7 +102,7 @@ class Nta_residential(QgsProcessingAlgorithm):
             "INPUT_GEOMETRY_CRS": None,
             "INPUT_GEOMETRY_FIELD": "",
             "INPUT_GEOMETRY_TYPE": None,
-            "INPUT_QUERY": " WITH no_dups AS\n  (\n SELECT nta2020, complex_id, AVG(mean_daily_entries) as mean_daily_entries, AVG(mean_daily_exits) as mean_daily_exits, geometry\n FROM input1\n GROUP BY nta2020, complex_id, geometry\n  )\n  SELECT \n  nta2020, SUM(mean_daily_entries) AS mean_daily_entries, SUM(mean_daily_exits) AS mean_daily_exits, geometry\n  FROM no_dups\n  GROUP BY nta2020, geometry\n",
+            "INPUT_QUERY": " WITH no_dups AS\n  (\n SELECT nta2020, complex_id, AVG(mean_daily_entries) as mean_daily_entries, AVG(mean_daily_exits) as mean_daily_exits, geometry\n FROM input1\n GROUP BY nta2020, complex_id, geometry\n  )\n  SELECT \n  nta2020, SUM(mean_daily_entries) AS mean_morning_peak_turnstile_entries, SUM(mean_daily_exits) AS mean_morning_peak_turnstile_exits, geometry\n  FROM no_dups\n  GROUP BY nta2020, geometry\n",
             "INPUT_UID_FIELD": "",
             "OUTPUT": QgsProcessing.TEMPORARY_OUTPUT,
         }
@@ -124,7 +124,7 @@ class Nta_residential(QgsProcessingAlgorithm):
             "FIELD_NAME": "is_residential",
             "FIELD_PRECISION": 0,
             "FIELD_TYPE": 6,  # Boolean
-            "FORMULA": " if((mean_daily_entries > mean_daily_exits) or mean_daily_entries IS NULL, true, false)\n",
+            "FORMULA": " if((mean_morning_peak_turnstile_entries > mean_morning_peak_turnstile_exits) or mean_morning_peak_turnstile_entries IS NULL, true, false)\n",
             "INPUT": outputs["ExecuteSql"]["OUTPUT"],
             "OUTPUT": parameters["Nta_residential"],
         }
