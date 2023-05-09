@@ -4,7 +4,6 @@ import util
 
 def residential_neighborhood(output_gpkg, project_dir):
     with util.qgis_context("/usr") as processing:
-        output_gpkg = project_dir / "data/interim/precursors.gpkg"
         processing.run(
             "custom_provider:nta_residential",
             {
