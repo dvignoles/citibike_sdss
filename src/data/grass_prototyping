@@ -14,13 +14,22 @@ v.import /home/ian/Documents/projects/bike_lanes/citibike_sdss/data/prepared/acs
 # Citi Bike stations
 v.import -o /home/ian/Documents/projects/bike_lanes/citibike_sdss/data/prepared/gbfs.gpkg layer=station --overwrite snap=1e-05
 
+### Load stations joined with peak summary
+v.import -o /home/ian/Documents/projects/bike_lanes/citibike_sdss/data/prepared/stations_with_peak_summary.gpkg --overwrite snap=1e-05
+
+v.import -o /home/ian/Documents/projects/bike_lanes/citibike_sdss/data/prepared/citibike_trips_2023.gpkg --overwrite snap=1e-05
+#######################################
+# Create Voronoi diagram for stations #
+#######################################
+v.voronoi input=stations_with_peak_summary output=stations_voronoi
+
 ##########################################
 # Set calculation region and raster mask #
 ##########################################
 
 # Set calcluation region to borough vector file
 # This also sets the raster resolution: res=10 means 10ft x 10ft cells 
-g.region vector=boroughs res=10
+g.region vector=boroughs res=100
 
 # Add value column (always equal to 1) for value of raster
 v.db.addcolumn boroughs column="value integer"
@@ -40,14 +49,6 @@ r.mask raster=boroughs_raster
 # Convert vector layers to rasters #
 ####################################
 
-### ACS population (10x10) ###
-g.region vector=boroughs res=10
-v.db.addcolumn map=acs column='pop_per_100sqft real'
-v.db.update map=acs column=pop_per_100sqft query_column='population * 100 / area'
-v.to.rast input=acs type=area output=population_raster_10x10 use=attr attribute_column=pop_per_100sqft --overwrite
-v.rast.stats map=acs raster=population_raster_10x10 method=sum column_prefix=raster_10x10_pop -c
-r.out.gdal input=population_raster_10x10 output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/population_10x10.gtiff
-
 ### ACS population (100x100) ###
 g.region vector=boroughs res=100
 v.db.addcolumn map=acs column='pop_per_10000sqft real'
@@ -55,14 +56,6 @@ v.db.update map=acs column=pop_per_10000sqft query_column='population * 10000 / 
 v.to.rast input=acs type=area output=population_raster_100x100 use=attr attribute_column=pop_per_10000sqft --overwrite
 v.rast.stats map=acs raster=population_raster_100x100 method=sum column_prefix=raster_100x100_pop -c
 r.out.gdal input=population_raster_100x100 output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/population_100x100.gtiff
-
-### ACS population (1000x1000) ###
-g.region vector=boroughs res=1000
-v.db.addcolumn map=acs column='pop_per_million_sqft real'
-v.db.update map=acs column=pop_per_million_sqft query_column='population * 1000000 / area'
-v.to.rast input=acs type=area output=population_raster_1000x1000 use=attr attribute_column=pop_per_million_sqft --overwrite
-v.rast.stats map=acs raster=population_raster_1000x1000 method=sum column_prefix=raster_1000x1000_pop -c
-r.out.gdal input=population_raster_1000x1000 output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/population1000x1000.gtiff --overwrite
 
 # Create columns to check difference between vector and raster population numbers
 # Difference is within +/- 10 people, mean is .03, and std. dev. is ~1
@@ -76,7 +69,6 @@ v.db.addcolumn map=acs column='pop_diff_1000x1000 real'
 v.db.update map=acs column=pop_diff_1000x1000 query_column='population - raster_10x10_pop_sum'
 
 ### Bike lanes ###
-
 # Add value column (always equal to 1) for value of raster
 v.db.addcolumn bike_routes column="value integer"
 v.db.update bike_routes column=value value=1
@@ -86,16 +78,21 @@ v.to.rast input=bike_routes type=line output=bike_routes_raster use=attr attribu
 r.out.gdal input=bike_routes_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/bike_lanes.gtiff --overwrite
 
 ### GBFS ###
-
-# # Add value column (always equal to 1) for value of raster
-# v.db.addcolumn station column="value integer"
-# v.db.update station column=value value=1
-
-# Create raster
+# Create capacity raster
 g.region vector=boroughs res=10
-v.to.rast input=station type=point output=gbfs_raster use=attr attribute_column=capacity --overwrite
+v.to.rast input=station type=point output=gbfs_capacity_raster use=attr attribute_column=capacity --overwrite
 r.out.gdal input=gbfs_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/gbfs_raster.gtiff --overwrite
 
+# Create peak hours unavaiablity raster
+g.region vector=boroughs res=10
+v.db.addcolumn stations_with_peak_summary column="percent_unavail_peak real"
+v.db.update stations_with_peak_summary column=percent_unavail_peak query_col=capacity_available_eq_0percent
+v.to.rast input=stations_with_peak_summary type=point output=gbfs_peak_unavailable_raster use=attr attribute_column=percent_unavail_peak --overwrite
+
+### Voronoi GBFS ###
+r.mask service_area_docks_per_person
+v.to.rast input=stations_voronoi output=percent_unavail_voronoi_raster use=attr attribute_column=percent_unavail_peak
+r.out.gdal  input=percent_unavail_voronoi_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/peak_capacity_0_voronoi.gtiff --overwrite
 
 ### Streets ###
 # Convert character column rw_type to new integer column street_type
@@ -112,7 +109,6 @@ echo "1 3 5 6 7 10 11 13 = 1
     r.reclass input=streets_raster output=bikeable_streets_raster rules=- --overwrite
 
 r.out.gdal input=bikeable_streets_raster output=/home/ian/Documents/projects/bike_lanes/citibike_sdss/data/processed/grass_outputs/bikeable_streets_raster.gtiff --overwrite
-
 
 ###########################
 # Create distance rasters #
@@ -151,6 +147,7 @@ v.out.ogr input=station output=/home/ian/Documents/projects/bike_lanes/citibike_
 # Calculate raster for distance to closest street
 # Note: could refine by excluding highways
 r.grow.distance input=bikeable_streets_raster distance=bikeable_streets_distance metric=euclidean --overwrite
+
 
 echo "0 thru 60 = 1
 61 thru 9999999 = 0" |
