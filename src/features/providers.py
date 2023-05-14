@@ -3,6 +3,8 @@ from qgis.core import QgsProcessingProvider
 
 
 class CustomAlgorithmProvider(QgsProcessingProvider):
+    """QGIS provider for geoprocessing models run outside of QGIS"""
+
     def loadAlgorithms(self, *args, **kwargs):
         self.addAlgorithm(Nta_residential())
 

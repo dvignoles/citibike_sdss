@@ -4,9 +4,6 @@ from pathlib import Path
 
 import click
 from dotenv import find_dotenv, load_dotenv
-from precursors import residential_neighborhood
-
-PRECURSORS = "data/interim/precursors.gpkg"
 
 
 @click.group()
@@ -19,12 +16,10 @@ def cli(ctx):
     ctx.obj["logger"] = logging.getLogger(__name__)
 
 
-@cli.command(help="Create precursor metrics")
+@cli.command(help="placeholder command")
 @click.pass_context
-def get_precursors(ctx):
+def placeholder(ctx):
     ctx.obj["logger"].info("Categorizing NTAs as residential / non-residential")
-    output_gpkg = project_dir / PRECURSORS
-    residential_neighborhood(output_gpkg, ctx.obj["project_dir"])
 
 
 if __name__ == "__main__":
