@@ -1,5 +1,5 @@
 #! /usr/bin/bash
-PROJECT_DIR="/home/ian/Documents/projects/bike_lanes/citibike_sdss"
+PROJECT_DIR="."
 DATA_DIR=$PROJECT_DIR"/data/prepared/"
 OUTPUT_DIR=$PROJECT_DIR"/data/processed/grass_script_outputs/"
 
