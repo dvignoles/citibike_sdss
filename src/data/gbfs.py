@@ -290,9 +290,12 @@ class StationStatus:
             return count
 
     def _peak_summary(self, con, period):
-        assert period in ("morning_peak", "evening_peak", "peak", "offpeak")
+        assert period in ("all", "morning_peak", "evening_peak", "peak", "offpeak")
 
         match period:
+            case "all":
+                where = "WHERE station.station_id in (SELECT station_id FROM not_stale)"
+                table = "status_summary"
             case "morning_peak":
                 where = "WHERE (reported_weekday BETWEEN 0 AND 4) AND reported_hour IN (6,7,8,9) AND stale = 0 AND station.station_id in (SELECT station_id FROM not_stale)"
                 table = "status_morning_peak_summary"
@@ -307,7 +310,7 @@ class StationStatus:
                 table = "status_offpeak_summary"
 
         sql = f"""
-            CREATE TABLE IF NOT EXISTS temp_{table} AS
+            CREATE TABLE IF NOT EXISTS {table} AS
             WITH not_stale AS(
                 SELECT
                 station_id,
@@ -400,21 +403,9 @@ class StationStatus:
         con.execute(sql)
         con.commit()
 
-        stations = gpd.read_file(self.output_file, layer="station")[
-            ["station_id", "geometry"]
-        ]
-        status = gpd.read_file(self.output_file, layer=f"temp_{table}")
-        status = status[[c for c in status.columns if c != "geometry"]]
-        status_with_geom = stations.merge(
-            status, left_on="station_id", right_on="station_id"
-        )
-        status_with_geom.to_file(self.output_file, layer=table)
-
-        con.execute(f"DROP TABLE temp_{table}")
-        con.commit()
-
     def create_summaries(self):
         with sqlite3.connect(self.output_file) as con:
+            self._peak_summary(con, period="all")
             self._peak_summary(con, period="morning_peak")
             self._peak_summary(con, period="evening_peak")
             self._peak_summary(con, period="peak")
