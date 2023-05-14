@@ -12,6 +12,9 @@ mta2023="../../data/prepared/mta_2023.gpkg"
 output="../../data/processed/mta_allyears.gpkg"
 
 # copy stations
+if [ -f "$output" ]; then
+    rm $output
+fi
 ogr2ogr -overwrite $output $mta2023 stations 
 
 prelude=$(cat << EOF
