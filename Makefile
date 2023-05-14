@@ -42,6 +42,10 @@ dev_requirements: test_environment
 data:
 	$(PYTHON_INTERPRETER) src/data/make_dataset.py
 
+## Run gdal/ogr scripts
+gdalogr:
+	./src/gdalogr/mta_join.sh
+
 ## Delete all compiled Python files
 clean:
 	find . -type f -name "*.py[co]" -delete
