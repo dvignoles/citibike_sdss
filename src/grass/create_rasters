@@ -55,21 +55,32 @@ convert_char_to_int () {
     v.db.renamecolumn map=$vector_map column=$int_column,$char_column
     }
 
+reclass_dist_constraint () {
+    input_raster=$1
+    min_dist=$2
+    max_dist=$3
+    output_raster=$4
+    rules="0 thru $((min_dist - 1)) = 0
+    ${min_dist} thru ${max_dist} = 1
+    $((cutoff + 1)) thru 9999999 = 0"
+    echo $rules | r.reclass input=$input_raster output=$output_raster rules=- --overwrite
+}
+
 ##################
 # Import vectors #
 ##################
 # ACS population
-load_layer acs.gpkg acs V_ACS
+load_layer acs.gpkg acs V_acs
 
 # NYC Open Data
-load_layer open_data.gpkg bike_routes V_BIKE_ROUTES
-load_layer open_data.gpkg boroughs V_BOROUGHS
-load_layer open_data.gpkg motor_vehicle_crashes V_CRASHES
-load_layer open_data.gpkg streets V_STREETS
+load_layer open_data.gpkg bike_routes V_bike_routes
+load_layer open_data.gpkg boroughs V_boroughs
+load_layer open_data.gpkg motor_vehicle_crashes V_crashes
+load_layer open_data.gpkg streets V_streets
 
 # GBFS
-load_layer gbfs.gpkg status_peak_summary V_GBFS_PEAK
-load_layer gbfs.gpkg status_offpeak_summary V_GBFS_OFFPEAK
+load_layer gbfs.gpkg status_peak_summary V_gbfs_peak
+load_layer gbfs.gpkg status_offpeak_summary V_gbfs_offpeak
 
 # Suggest a Station
 load_layer sas.gpkg sas V_SAS
