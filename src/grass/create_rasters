@@ -3,10 +3,14 @@ PROJECT_DIR="."
 DATA_DIR=$PROJECT_DIR"/data/prepared/"
 OUTPUT_DIR=$PROJECT_DIR"/data/processed/grass_script_outputs/"
 
+if [ ! -d "$OUTPUT_DIR" ]; then
+    mkdir $OUTPUT_DIR
+fi
+
 # All values are in feet
 COARSE_RES=1000
-MEDIUM_RES=1000
-FINE_RES=1000
+MEDIUM_RES=100
+FINE_RES=10
 WALK_RADIUS=2640
 MAX_DIST_CB_TO_STREET=60
 MIN_DIST_CB_TO_CB=100
