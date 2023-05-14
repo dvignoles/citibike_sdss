@@ -1,15 +1,11 @@
 #! /usr/bin/bash
-
 PROJECT_DIR="/home/ian/Documents/projects/bike_lanes/citibike_sdss"
 DATA_DIR=$PROJECT_DIR"/data/prepared/"
 OUTPUT_DIR=$PROJECT_DIR"/data/processed/grass_script_outputs/"
 
-COARSE_RES=100
+COARSE_RES=1000
+MEDIUM_RES=100
 FINE_RES=10
-
-#########################
-# Function declarations #
-#########################
 
 load_layer () {
     filename=$1
@@ -41,7 +37,7 @@ rasterize_vector () {
 	      use=attr attribute_column=$attribute_column --overwrite
 }
 
-convert_char_col_to_int () {
+convert_char_to_int () {
     # Replace attribute table char column with int column with same values.
     
     vector_map=$1
@@ -85,13 +81,67 @@ v.voronoi input=V_GBFS_PEAK output=V_GBFS_PEAK_VORONOI
 ###########################
 # Rasterize vector layers #
 ###########################
-g.region vector=V_BOROUGHS res=$COARSE_RES
 
-rasterize_vector V_ACS area R_ACS population
-convert_char_col_to_int V_BOROUGHS boro_code
+### Medium-resolution rasters (for calculating suitability layers)
+g.region vector=V_BOROUGHS res=$MEDIUM_RES
+
+# Boroughs
+convert_char_to_int V_BOROUGHS boro_code
 rasterize_vector V_BOROUGHS area R_BOROUGHS boro_code
 
+# ACS population
+rasterize_vector V_ACS area R_ACS population
+
+# GBFS
+convert_char_to_int V_GBFS_PEAK capacity_available_eq_0percent
+rasterize_vector V_GBFS_PEAK point R_GBFS_PEAK_NO_BIKES capacity_available_eq_0percent
+
+convert_char_to_int V_GBFS_OFFPEAK capacity_available_eq_0percent
+rasterize_vector V_GBFS_OFFPEAK point R_GBFS_OFFPEAK_NO_BIKES capacity_available_eq_0percent
+
+# Crashes
+# A different method is necessary because crashes can occur close together,
+# so they must be spatially binned.
+v.out.ascii input=V_CRASHES output=- column=number_of_cyclist_injured | \
+    r.in.xyz input=- z=4 output=R_CRASHES method=sum
+
+# Bike routes
+convert_char_to_int V_BIKE_ROUTES lanecount
+rasterize_vector V_BIKE_ROUTES line R_BIKE_ROUTES lanecount
+
+### Fine-resolution rasters (for calculating constraint layer)
+g.region vector=V_BOROUGHS res=$FINE_RES
+
+# Streets
+convert_char_to_int V_STREETS rw_type
+rasterize_vector V_STREETS line R_STREETS rw_type
+
+
+###############################
+# Constraint layers and masks #
+###############################
+g.region vector=V_BOROUGHS res=$FINE_RES
+r.mask raster=R_BOROUGHS
+
+# Reclassify streets raster to exclude highways, bridges, tunnels, etc.
+# See streets metadata doc in citbike_sdss/references for all codes
+echo "1 3 5 6 7 10 11 13 = 1
+2 4 8 9 12 14 = NULL" | 
+    r.reclass input=R_STREETS output=R_BIKEABLE_STREETS rules=- --overwrite
+
+# Calculate raster for distance to bikeable streets
+r.grow.distance input=R_BIKEABLE_STREETS distance=R_BIKEABLE_STREETS_DISTANCE metric=euclidean --overwrite
+
+# Calculate raster for distance to Citi Bike stations
+r.grow.distance input=gbfs_raster distance=station_distance metric=euclidean --overwrite
+
+################
+# Save rasters #
+################
+save_raster R_BOROUGHS boroughs.gtiff
 save_raster R_ACS acs_pop.gtiff
-# r_out R_BOROUGHS BOROUGHS boroughs.gtiff
-g.list vector > vector.txt
-g.list raster > raster.txt
+save_raster R_GBFS_PEAK_NO_BIKES gbfs_peak_no_bikes.gtiff
+save_raster R_GBFS_OFFPEAK_NO_BIKES gbfs_offpeak_no_bikes.gtiff
+save_raster R_CRASHES crashes_injured_cyclists.gtiff
+save_raster R_BIKE_ROUTES bike_routes.gtiff
+save_raster R_STREETS streets.gitff
