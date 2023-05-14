@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# work from this dir for relative paths
+cwd=$(dirname "${BASH_SOURCE[0]}")
+cd $cwd
+
 mta2019="../../data/prepared/mta_2019.gpkg"
 mta2020="../../data/prepared/mta_2020.gpkg"
 mta2021="../../data/prepared/mta_2021.gpkg"
@@ -7,10 +11,8 @@ mta2022="../../data/prepared/mta_2022.gpkg"
 mta2023="../../data/prepared/mta_2023.gpkg"
 output="../../data/processed/mta_allyears.gpkg"
 
-if [ -f "$output" ]; then
-    echo "replacing existing $output"
-    rm $output
-fi
+# copy stations
+ogr2ogr -overwrite $output $mta2023 stations 
 
 prelude=$(cat << EOF
 ATTACH DATABASE "$mta2019" AS m19;
