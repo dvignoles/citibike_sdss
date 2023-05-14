@@ -4,7 +4,7 @@ DATA_DIR=$PROJECT_DIR"/data/prepared/"
 OUTPUT_DIR=$PROJECT_DIR"/data/processed/grass_script_outputs/"
 
 if [ ! -d "$OUTPUT_DIR" ]; then
-    mkdir $OUTPUT_DIR
+    mkdir -p $OUTPUT_DIR
 fi
 
 # All values are in feet
