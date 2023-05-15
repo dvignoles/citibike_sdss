@@ -64,10 +64,18 @@ reclass_dist_constraint () {
     min_dist=$2
     max_dist=$3
     output_raster=$4
-    rules="0 thru $((min_dist - 1)) = 0
-    ${min_dist} thru ${max_dist} = 1
-    $((cutoff + 1)) thru 9999999 = 0"
-    echo $rules | r.reclass input=$input_raster output=$output_raster rules=- --overwrite
+    if (( $min_dist==0 )); then
+       echo "Zero"
+       rules="0 thru $((max_dist - 1)) = 1
+       ${max_dist} thru 9999999 = 0"
+    else
+       echo "Not zero"
+       rules="0 thru $((min_dist - 1)) = 0
+       ${min_dist} thru ${max_dist} = 1
+       $((max_dist + 1)) thru 9999999 = 0"
+    fi
+    echo "Rules: ${rules}"
+    echo "$rules" | r.reclass input=$input_raster output=$output_raster rules=- --overwrite
 }
 
 ##################
