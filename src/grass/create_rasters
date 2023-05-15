@@ -112,19 +112,8 @@ v.voronoi input=V_gbfs_peak output=V_GBFS_PEAK_VORONOI
 ### Medium-resolution rasters (for calculating suitability layers)
 g.region vector=V_boroughs res=$MEDIUM_RES
 
-# Boroughs
-convert_char_to_int V_boroughs boro_code
-rasterize_vector V_boroughs area R_boroughs boro_code
-
 # ACS population
 rasterize_vector V_acs area R_ACS population
-
-# GBFS
-convert_char_to_int V_gbfs_peak capacity_available_eq_0percent
-rasterize_vector V_gbfs_peak point R_gbfs_peak_no_bikes capacity_available_eq_0percent
-
-convert_char_to_int V_gbfs_offpeak capacity_available_eq_0percent
-rasterize_vector V_gbfs_offpeak point R_gbfs_offpeak_no_bikes capacity_available_eq_0percent
 
 # Crashes
 # A different method is necessary because crashes can occur close together,
@@ -132,17 +121,27 @@ rasterize_vector V_gbfs_offpeak point R_gbfs_offpeak_no_bikes capacity_available
 v.out.ascii input=V_crashes output=- column=number_of_cyclist_injured | \
     r.in.xyz input=- z=4 output=R_crashes method=sum
 
+### Fine-resolution rasters (for calculating constraint layer)
+g.region vector=V_boroughs res=$FINE_RES
+
 # Bike routes
 convert_char_to_int V_bike_routes lanecount
 rasterize_vector V_bike_routes line R_bike_routes lanecount
-
-### Fine-resolution rasters (for calculating constraint layer)
-g.region vector=V_boroughs res=$FINE_RES
 
 # Streets
 convert_char_to_int V_streets rw_type
 rasterize_vector V_streets line R_streets rw_type
 
+# Boroughs
+convert_char_to_int V_boroughs boro_code
+rasterize_vector V_boroughs area R_boroughs boro_code
+
+# GBFS
+convert_char_to_int V_gbfs_peak capacity_available_eq_0percent
+rasterize_vector V_gbfs_peak point R_gbfs_peak_no_bikes capacity_available_eq_0percent
+
+convert_char_to_int V_gbfs_offpeak capacity_available_eq_0percent
+rasterize_vector V_gbfs_offpeak point R_gbfs_offpeak_no_bikes capacity_available_eq_0percent
 
 ###############################
 # Constraint layers and masks #
@@ -156,18 +155,29 @@ echo "1 3 5 6 7 10 11 13 = 1
 2 4 8 9 12 14 = NULL" | 
     r.reclass input=R_streets output=R_bikeable_streets rules=- --overwrite
 
-# Calculate raster for distance to bikeable streets
+# Calculate raster and constraint for distance to bikeable streets
 r.grow.distance input=R_bikeable_streets distance=R_dist_bikeable_street metric=euclidean --overwrite
 
-# Calculate raster for distance to Citi Bike stations
+reclass_dist_constraint R_dist_bikeable_street \
+			0 \
+			$MAX_DIST_CB_TO_STREET \
+			R_bikeable_street_constraint
+
+# Calculate raster and constraint for distance to Citi Bike stations
 r.grow.distance input=R_gbfs_peak_no_bikes distance=R_dist_cb metric=euclidean --overwrite
 
-reclass_dist_constraint R_dist_bikeable_street \
-			10 \
-			$MAX_DIST_CB_TO_STREET \
-			R_dist_bikeable_street_constraint
+reclass_dist_constraint R_dist_cb \
+			$MIN_DIST_CB_TO_CB \
+			$WALK_RADIUS \
+			R_cb_constraint
+
+r.mapcalc "R_constraint = R_cb_constraint * R_bikeable_street_constraint"
 
 ################
 # Save rasters #
 ################
-save_raster R_gbfs_peak_no_bikes gbfs_peak_no_bikes.gtiff
+save_raster R_bikeable_street_constraint dist_bikeable_street_constraint.gtiff
+save_raster R_dist_bikeable_street dist_bikeable_street.gtiff
+save_raster R_dist_cb dist_cb.gtiff
+save_raster R_cb_constraint dist_cb_constraint.gtiff
+save_raster R_constraint constraint.gtiff
