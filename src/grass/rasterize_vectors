@@ -1,0 +1,191 @@
+#! /usr/bin/bash
+PROJECT_DIR="."
+DATA_DIR=$PROJECT_DIR"/data/prepared/"
+OUTPUT_DIR=$PROJECT_DIR"/data/processed/grass_script_outputs/"
+SRC_DIR=$PROJECT_DIR"/src/grass/"
+
+if [ ! -d "$OUTPUT_DIR" ]; then
+    mkdir -p $OUTPUT_DIR
+fi
+
+. "${SRC_DIR}set_grass_constants"
+. "${SRC_DIR}define_sdss_util"
+
+##################
+# Import vectors #
+##################
+# ACS population
+load_layer acs.gpkg acs V_acs
+
+# NYC Open Data
+load_layer open_data.gpkg bike_routes V_bike_routes
+load_layer open_data.gpkg boroughs V_boroughs
+load_layer open_data.gpkg motor_vehicle_crashes V_crashes
+load_layer open_data.gpkg streets V_streets
+
+# GBFS
+load_layer gbfs_summary.gpkg status_peak_summary V_gbfs_peak
+load_layer gbfs_summary.gpkg status_offpeak_summary V_gbfs_offpeak
+
+# Suggest a Station
+load_layer sas.gpkg sas V_SAS
+
+# MTA turnstile data
+load_layer mta_2023.gpkg stations V_turnstile_2023
+
+# Trips
+load_layer citibike_trips_summary.gpkg trips_summary_2023 V_trips_2023
+	
+################################
+# Calculate constraint layer #
+################################
+# This fine-resolution raster identifies possible locations for new Citi Bike stations
+
+### Fine-resolution rasters for calculating constraint
+g.region vector=V_boroughs res=$FINE_RES
+
+# Boroughs
+convert_char_to_int V_boroughs boro_code
+rasterize_vector V_boroughs area boro_code R_boroughs_fine
+
+r.mask raster=R_boroughs_fine
+
+# Bike routes
+convert_char_to_int V_bike_routes lanecount
+rasterize_vector V_bike_routes line lanecount R_bike_routes
+save_raster R_bike_routes
+
+# Streets
+convert_char_to_int V_streets rw_type
+rasterize_vector V_streets line rw_type R_streets
+save_raster R_streets
+
+# Reclassify streets raster to exclude highways, bridges, tunnels, etc.
+# See streets metadata doc in citbike_sdss/references for all codes
+echo "1 3 5 6 7 10 11 13 = 1
+2 4 8 9 12 14 = NULL" | 
+    r.reclass input=R_streets output=R_bikeable_streets rules=- --overwrite
+
+# Calculate raster and constraint for distance to bikeable streets
+r.grow.distance input=R_bikeable_streets distance=R_dist_bikeable_street metric=euclidean --overwrite
+
+reclass_dist_constraint R_dist_bikeable_street \
+			0 \
+			$MAX_DIST_CB_TO_STREET \
+			R_bikeable_street_constraint
+
+load_layer gbfs_summary.gpkg station V_cb_stations
+
+v.to.rast input=V_cb_stations type=point output=R_cb_stations \
+	  use=val value=1 --overwrite
+
+# Calculate raster and constraint for distance to Citi Bike stations
+r.grow.distance input=R_cb_stations distance=R_dist_cb metric=euclidean --overwrite
+
+reclass_dist_constraint R_dist_cb \
+			$MIN_DIST_CB_TO_CB \
+			$WALK_RADIUS \
+			R_cb_constraint
+
+r.mapcalc "R_constraint = R_cb_constraint * R_bikeable_street_constraint"
+
+save_raster R_constraint constraint.gtiff
+
+###########################
+# Service area mask layer #
+###########################
+# This medium-resolution raster defines the service area of the current system
+# WALK_RADIUS buffer around all existing stations, clipped by boroughs
+
+# Resample boroughs raster to medium resolution
+g.region vector=V_boroughs res=$MEDIUM_RES
+r.resample input=R_boroughs_fine output=R_boroughs_medium
+save_raster R_boroughs_medium
+
+# Reclassify R distance constraint, removing min. CB distance constraint
+# (to calculate continuous service area without "holes" by stations)
+reclass_dist_constraint R_dist_cb \
+			0 \
+			$WALK_RADIUS \
+			R_service_area_fine
+
+# Resample fine service area to medium resolution
+r.resample input=R_service_area_fine output=R_service_area
+
+r.mask -r
+r.mask raster=R_boroughs_medium
+
+r.null R_service_area setnull=0
+save_raster R_service_area
+
+###########################
+# Rasterize vector layers #
+###########################
+
+### Medium-resolution rasters for calculating suitability layers
+g.region vector=V_boroughs res=$MEDIUM_RES
+
+### Exploratory layers covering all boroughs
+r.mask -r
+r.mask R_boroughs_medium
+
+# ACS population
+v.db.addcolumn map=V_acs column='pop_per_area real'
+v.db.addcolumn map=V_acs column='cell_area real'
+
+v.db.update map=V_acs column=cell_area value=$MEDIUM_CELL_AREA
+v.db.update map=V_acs column=pop_per_area query_column="population * cell_area / area"
+
+rasterize_vector V_acs area pop_per_area R_acs
+save_raster R_acs
+
+sum_rast_in_walk_radius R_acs R_acs_sum
+save_raster R_acs_sum
+
+# Crashes
+bin_vect_to_rast V_crashes \
+		 number_of_cyclist_injured \
+		 R_crashes \
+		 sum
+
+sum_rast_in_walk_radius R_crashes R_crashes_sum
+save_raster R_crashes_sum
+
+# Docks / population within radius
+bin_vect_to_rast V_cb_stations \
+		 capacity \
+		 R_cb_capacity \
+		 sum
+
+sum_rast_in_walk_radius R_cb_capacity R_cb_capacity_sum
+save_raster R_cb_capacity_sum
+
+# Distance to bike routes
+
+
+### Analytical layers covering current CB system
+r.mask -r
+r.mask R_service_area
+
+# GBFS peak
+convert_char_to_real V_gbfs_peak bikes_available_eq0
+convert_char_to_real V_gbfs_peak docks_available_eq0
+v.voronoi input=V_gbfs_peak output=V_gbfs_peak_voronoi
+
+rasterize_vector V_gbfs_peak_voronoi area bikes_available_eq0 R_gbfs_peak_bikes_eq0
+rasterize_vector V_gbfs_peak_voronoi area docks_available_eq0 R_gbfs_peak_docks_eq0
+save_raster R_gbfs_peak_bikes_eq0
+save_raster R_gbfs_peak_docks_eq0
+
+# GBFS off-peak
+convert_char_to_real V_gbfs_offpeak bikes_available_eq0
+convert_char_to_real V_gbfs_offpeak docks_available_eq0
+v.voronoi input=V_gbfs_offpeak output=V_gbfs_offpeak_voronoi
+
+rasterize_vector V_gbfs_offpeak_voronoi area bikes_available_eq0 R_gbfs_offpeak_bikes_eq0
+rasterize_vector V_gbfs_offpeak_voronoi area docks_available_eq0 R_gbfs_offpeak_docks_eq0
+save_raster R_gbfs_offpeak_bikes_eq0
+save_raster R_gbfs_offpeak_docks_eq0
+
+g.list vector > vectors.txt
+g.list raster > rasters.txt
