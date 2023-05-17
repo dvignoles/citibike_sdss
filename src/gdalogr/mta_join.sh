@@ -12,6 +12,8 @@ mta2023="../../data/prepared/mta_2023.gpkg"
 output="../../data/processed/mta_allyears.gpkg"
 
 # copy stations
+echo "[GDAL/OGR]: MTA Turnstile"
+echo "[GDAL/OGR]: MTA Turnstile -- Writing Stations"
 ogr2ogr -overwrite $output $mta2023 stations 
 
 prelude=$(cat << EOF
@@ -126,5 +128,8 @@ do
 EOF
 )
 
+    echo "[GDAL/OGR]: MTA Turnstile -- Aggregating ${annual_table}"
     ogr2ogr -oo PRELUDE_STATEMENTS="$prelude" -append -nln $annual_table -sql "$sql" $output $mta2023 
 done
+
+   echo $(realpath $output)
