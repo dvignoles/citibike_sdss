@@ -290,9 +290,12 @@ class StationStatus:
             return count
 
     def _peak_summary(self, con, period):
-        assert period in ("morning_peak", "evening_peak", "peak", "offpeak")
+        assert period in ("all", "morning_peak", "evening_peak", "peak", "offpeak")
 
         match period:
+            case "all":
+                where = "WHERE station.station_id in (SELECT station_id FROM not_stale)"
+                table = "status_summary"
             case "morning_peak":
                 where = "WHERE (reported_weekday BETWEEN 0 AND 4) AND reported_hour IN (6,7,8,9) AND stale = 0 AND station.station_id in (SELECT station_id FROM not_stale)"
                 table = "status_morning_peak_summary"
@@ -307,7 +310,7 @@ class StationStatus:
                 table = "status_offpeak_summary"
 
         sql = f"""
-            CREATE TABLE IF NOT EXISTS temp_{table} AS
+            CREATE TABLE IF NOT EXISTS {table} AS
             WITH not_stale AS(
                 SELECT
                 station_id,
@@ -339,6 +342,14 @@ class StationStatus:
             totals AS (
                 SELECT station_fid, station_id,
                 COUNT(*) as total,
+                SUM(CASE WHEN num_bikes_available = 0 THEN 1 else 0 end) as count_eq0_bikes_available,
+                SUM(CASE WHEN num_bikes_available = 1 THEN 1 else 0 end) as count_eq1_bikes_available,
+                SUM(CASE WHEN num_bikes_available <= 3 THEN 1 else 0 end) as count_lte3_bikes_available,
+                SUM(CASE WHEN num_bikes_available <= 5 THEN 1 else 0 end) as count_lte5_bikes_available,
+                SUM(CASE WHEN num_docks_available = 0 THEN 1 else 0 end) as count_eq0_docks_available,
+                SUM(CASE WHEN num_docks_available = 1 THEN 1 else 0 end) as count_eq1_docks_available,
+                SUM(CASE WHEN num_docks_available <= 3 THEN 1 else 0 end) as count_lte3_docks_available,
+                SUM(CASE WHEN num_docks_available <= 5 THEN 1 else 0 end) as count_lte5_docks_available,
                 round(AVG(perc_capacity_available), 3) as avg_perc_capacity_available,
                 round(AVG(perc_enabled_available), 3) as avg_perc_enabled_available,
                 SUM(CASE WHEN perc_capacity_available = 0.0 THEN 1 else 0 end) as count_0,
@@ -362,6 +373,14 @@ class StationStatus:
             )
             SELECT
                 station_fid, station_id,
+                round(count_eq0_bikes_available*1.0 / total*1.0, 3) AS bikes_available_eq0,
+                round(count_eq1_bikes_available*1.0 / total*1.0, 3) AS bikes_available_eq1,
+                round(count_lte3_bikes_available*1.0 / total*1.0, 3) AS bikes_available_lte3,
+                round(count_lte5_bikes_available*1.0 / total*1.0, 3) AS bikes_available_lte5,
+                round(count_eq0_docks_available*1.0 / total*1.0, 3) AS docks_available_eq0,
+                round(count_eq1_docks_available*1.0 / total*1.0, 3) AS docks_available_eq1,
+                round(count_lte3_docks_available*1.0 / total*1.0, 3) AS docks_available_lte3,
+                round(count_lte5_docks_available*1.0 / total*1.0, 3) AS docks_available_lte5,
                 avg_perc_capacity_available,
                 avg_perc_enabled_available,
                 round(count_0*1.0 / total*1.0, 3) AS capacity_available_eq_0percent,
@@ -384,21 +403,9 @@ class StationStatus:
         con.execute(sql)
         con.commit()
 
-        stations = gpd.read_file(self.output_file, layer="station")[
-            ["station_id", "geometry"]
-        ]
-        status = gpd.read_file(self.output_file, layer=f"temp_{table}")
-        status = status[[c for c in status.columns if c != "geometry"]]
-        status_with_geom = stations.merge(
-            status, left_on="station_id", right_on="station_id"
-        )
-        status_with_geom.to_file(self.output_file, layer=table)
-
-        con.execute(f"DROP TABLE temp_{table}")
-        con.commit()
-
     def create_summaries(self):
         with sqlite3.connect(self.output_file) as con:
+            self._peak_summary(con, period="all")
             self._peak_summary(con, period="morning_peak")
             self._peak_summary(con, period="evening_peak")
             self._peak_summary(con, period="peak")

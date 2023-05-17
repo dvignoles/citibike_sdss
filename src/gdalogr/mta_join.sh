@@ -11,9 +11,12 @@ mta2022="../../data/prepared/mta_2022.gpkg"
 mta2023="../../data/prepared/mta_2023.gpkg"
 output="../../data/prepared/mta_allyears.gpkg"
 
-# copy stations
+if [ -f "$output" ]; then
+    rm $output
+
 echo "[GDAL/OGR]: MTA Turnstile"
 echo "[GDAL/OGR]: MTA Turnstile -- Writing Stations"
+# copy stations
 ogr2ogr -overwrite $output $mta2023 stations 
 
 prelude=$(cat << EOF
