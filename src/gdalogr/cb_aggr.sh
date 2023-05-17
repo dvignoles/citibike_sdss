@@ -12,6 +12,8 @@ if [ -f $output ]; then
     rm $output
 fi
 
+echo "[GDAL/OGR]: Citi Bike Trip"
+echo "[GDAL/OGR]: Citi Bike Trip -- Writing Stations"
 ogr2ogr -overwrite $output $gbfs station 
 
 prelude=$(cat << EOF
@@ -92,6 +94,7 @@ totals AS (
 EOF
 )
 
+echo "[GDAL/OGR]: Citi Bike Trip -- Aggregating ${table}"
 ogr2ogr -oo PRELUDE_STATEMENTS="$prelude" -append -nln "$table" -sql "$sql" $output $input_gpkg
 
 # all other years are internally consistent with their station_ids
@@ -144,6 +147,7 @@ do
 EOF
 )
 
+    echo "[GDAL/OGR]: Citi Bike Trip -- Aggregating ${table}"
     ogr2ogr -oo PRELUDE_STATEMENTS="$prelude" -append -nln "$table" -sql "$sql" $output $input_gpkg
 done
 
@@ -180,4 +184,7 @@ FROM station LEFT JOIN totals ON station.station_id = totals.station_id
 EOF
 )
 
+echo "[GDAL/OGR]: Citi Bike Trip -- Aggregating trips_summary"
 ogr2ogr -append -nln "trips_summary" -sql "$sql" $output $output
+
+echo $output
