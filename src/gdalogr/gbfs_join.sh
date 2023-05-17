@@ -5,12 +5,14 @@ cwd=$(dirname "${BASH_SOURCE[0]}")
 cd $cwd
 
 gbfs="../../data/prepared/gbfs.gpkg"
-output="../../data/processed/gbfs_summary.gpkg"
+output="../../data/prepared/gbfs_summary.gpkg"
 
 # copy stations
 if [ -f "$output" ]; then
     rm $output
 fi
+echo "[GDAL/OGR]: GBFS Summary"
+echo "[GDAL/OGR]: GBFS Summary -- Writing Stations"
 ogr2ogr -overwrite $output $gbfs station 
 
 
@@ -25,5 +27,8 @@ do
 EOF
 )
 
+    echo "[GDAL/OGR]: GBFS Summary -- Aggregating ${status_table}"
     ogr2ogr -append -nln $status_table -sql "$sql" $output $gbfs 
 done
+
+    echo $(realpath $output)
