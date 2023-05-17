@@ -5,7 +5,7 @@
 #cd $cwd
 
 gbfs="../../data/prepared/gbfs.gpkg"
-output="../../data/processed/citibike_trips_summary.gpkg"
+output="../../data/prepared/citibike_trips_summary.gpkg"
 
 # copy stations
 if [ -f $output ]; then
