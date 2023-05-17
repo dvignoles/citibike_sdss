@@ -1,0 +1,195 @@
+#! /usr/bin/bash
+
+################################
+# Start grass and import files #
+################################
+
+grass --tmp-location EPSG:2263
+
+# Import with snapping to within .00001 ft
+# NYC Open Data
+v.import ./data/prepared/open_data.gpkg --overwrite snap=1e-05
+# Census population
+v.import ./data/prepared/acs.gpkg --overwrite snap=1e-05
+# Citi Bike stations
+v.import -o ./data/prepared/gbfs.gpkg layer=station --overwrite snap=1e-05
+
+### Load stations joined with peak summary
+v.import -o ./data/prepared/stations_with_peak_summary.gpkg --overwrite snap=1e-05
+
+v.import -o ./data/prepared/citibike_trips_2023.gpkg --overwrite snap=1e-05
+#######################################
+# Create Voronoi diagram for stations #
+#######################################
+v.voronoi input=stations_with_peak_summary output=stations_voronoi
+
+##########################################
+# Set calculation region and raster mask #
+##########################################
+
+# Set calcluation region to borough vector file
+# This also sets the raster resolution: res=10 means 10ft x 10ft cells 
+g.region vector=boroughs res=100
+
+# Add value column (always equal to 1) for value of raster
+v.db.addcolumn boroughs column="value integer"
+v.db.update boroughs column=value value=1
+
+# Create raster
+v.to.rast input=boroughs type=area output=boroughs_raster use=attr attribute_column=value --overwrite
+r.out.gdal input=boroughs_raster output=./data/processed/grass_outputs/boroughs_raster.gtiff --overwrite
+
+# Boroughs raster serves as a raster mask for subsequent calculations
+# This avoids calculating raster cells on the water or outside NYC 
+
+# Set mask
+r.mask raster=boroughs_raster
+
+####################################
+# Convert vector layers to rasters #
+####################################
+
+### ACS population (100x100) ###
+g.region vector=boroughs res=100
+v.db.addcolumn map=acs column='pop_per_10000sqft real'
+v.db.update map=acs column=pop_per_10000sqft query_column='population * 10000 / area'
+v.to.rast input=acs type=area output=population_raster_100x100 use=attr attribute_column=pop_per_10000sqft --overwrite
+v.rast.stats map=acs raster=population_raster_100x100 method=sum column_prefix=raster_100x100_pop -c
+r.out.gdal input=population_raster_100x100 output=./data/processed/grass_outputs/population_100x100.gtiff
+
+# Create columns to check difference between vector and raster population numbers
+# Difference is within +/- 10 people, mean is .03, and std. dev. is ~1
+v.db.addcolumn map=acs column='pop_diff_10x10 real'
+v.db.update map=acs column=pop_diff_10x10 query_column='population - raster_10x10_pop_sum'
+
+v.db.addcolumn map=acs column='pop_diff_100x100 real'
+v.db.update map=acs column=pop_diff_100x100 query_column='population - raster_100x100_pop_sum'
+
+v.db.addcolumn map=acs column='pop_diff_1000x1000 real'
+v.db.update map=acs column=pop_diff_1000x1000 query_column='population - raster_10x10_pop_sum'
+
+### Bike lanes ###
+# Add value column (always equal to 1) for value of raster
+v.db.addcolumn bike_routes column="value integer"
+v.db.update bike_routes column=value value=1
+
+# Create raster
+v.to.rast input=bike_routes type=line output=bike_routes_raster use=attr attribute_column=value --overwrite
+r.out.gdal input=bike_routes_raster output=./data/processed/grass_outputs/bike_lanes.gtiff --overwrite
+
+### GBFS ###
+# Create capacity raster
+g.region vector=boroughs res=10
+v.to.rast input=station type=point output=gbfs_capacity_raster use=attr attribute_column=capacity --overwrite
+r.out.gdal input=gbfs_raster output=./data/processed/grass_outputs/gbfs_raster.gtiff --overwrite
+
+# Create peak hours unavaiablity raster
+g.region vector=boroughs res=10
+v.db.addcolumn stations_with_peak_summary column="percent_unavail_peak real"
+v.db.update stations_with_peak_summary column=percent_unavail_peak query_col=capacity_available_eq_0percent
+v.to.rast input=stations_with_peak_summary type=point output=gbfs_peak_unavailable_raster use=attr attribute_column=percent_unavail_peak --overwrite
+
+### Voronoi GBFS ###
+r.mask service_area_docks_per_person
+v.to.rast input=stations_voronoi output=percent_unavail_voronoi_raster use=attr attribute_column=percent_unavail_peak
+r.out.gdal  input=percent_unavail_voronoi_raster output=./data/processed/grass_outputs/peak_capacity_0_voronoi.gtiff --overwrite
+
+### Streets ###
+# Convert character column rw_type to new integer column street_type
+v.db.addcolumn streets column="street_type integer"
+v.db.update streets column=street_type query_col=rw_type
+
+# Create raster from street_type
+v.to.rast input=streets type=line output=streets_raster use=attr attribute_column=street_type --overwrite
+
+# Reclassify streets raster to exclude highways, bridges, tunnels, etc.
+# See streets metadata doc in citbike_sdss/references for all codes
+echo "1 3 5 6 7 10 11 13 = 1
+2 4 8 9 12 14 = NULL" | 
+    r.reclass input=streets_raster output=bikeable_streets_raster rules=- --overwrite
+
+r.out.gdal input=bikeable_streets_raster output=./data/processed/grass_outputs/bikeable_streets_raster.gtiff --overwrite
+
+###########################
+# Create distance rasters #
+###########################
+# Distance from Citi Bike stations
+r.grow.distance input=gbfs_raster distance=station_distance metric=euclidean --overwrite
+r.out.gdal input=station_distance output=./data/processed/grass_outputs/station_distance.gtiff --overwrite
+ 
+# Calculate current distances between each station and its closest neighbor
+v.db.addcolumn station column="distance_to_nearest real"
+v.distance from=station from_type=point to=station to_type=point dmin=.00001 upload=dist column=distance_to_nearest
+
+# Results for distance b/w existing stations	
+# minimum: 130.92 ft			        
+# maximum: 2486.95 ft			        
+# mean: 684.814 ft				
+
+# Calculate constraint raster based on distance: minimum 100 ft, maxmium 2640 ft (half a mile)
+# Note: rules=- means read the rules from standard input; otherwise a file is specified
+# Note: r.reclass does not make a real raster, just a reclassification table that is called on the original raster every time the user accesses the reclassified "raster".
+echo "0 thru 100 = 0
+101 thru 2640 = 1
+2640 thru 9999999 = 0" |
+    r.reclass input=station_distance output=station_distance_constraint rules=-
+    
+r.out.gdal input=station_distance_constraint output=./data/processed/grass_outputs/station_distance_constraint.gtiff --overwrite
+
+
+# Get distance to nearest bikeable street for each existing station
+v.db.addcolumn station column="distance_to_nearest_street real"
+v.what.rast map=station raster=bikeable_streets_distance column=distance_to_nearest_street --overwrite
+v.out.ogr input=station output=./data/processed/grass_outputs/stations_with_distance.gpkg --overwrite
+# 99.5% quantile for existing stations' distance to bikeable street is 60 ft
+# Can use 60 ft around bikeable streets for constraint layer
+
+# Calculate raster for distance to closest street
+# Note: could refine by excluding highways
+r.grow.distance input=bikeable_streets_raster distance=bikeable_streets_distance metric=euclidean --overwrite
+
+
+echo "0 thru 60 = 1
+61 thru 9999999 = 0" |
+    r.reclass input=bikeable_streets_distance output=bikeable_streets_distance_constraint rules=- --overwrite
+
+r.out.gdal input=bikeable_streets_distance_constraint output=./data/processed/grass_outputs/bikeable_streets_distance_constraint.gtiff --overwrite
+
+### Distance from bike routes ###
+r.grow.distance input=bike_routes_raster distance=bike_routes_distance metric=euclidean --overwrite
+r.out.gdal input=station_distance output=./data/processed/grass_outputs/station_distance.gtiff --overwrite
+
+echo "0 thru 60 = 1
+61 thru 9999999 = 0" |
+    r.reclass input=bike_routes_distance output=bike_routes_distance_constraint rules=- --overwrite
+r.out.gdal input=bike_routes_distance_constraint output=./data/processed/grass_outputs/bike_routes_distance_constraint.gtiff --overwrite
+
+r.mapcalc "constraint = bikeable_streets_distance_constraint * station_distance_constraint"
+r.out.gdal input=constraint output=./data/processed/grass_outputs/constraint.gtiff --overwrite
+
+
+# Analysis of overlap between bike_routes_distance_constraint and
+# bikeable_streets_distance_constraint showed that there was about .03
+# mi additional area included when adding
+# bikeable_streets_distance_constraint. However, visual inspection
+# showed that this additional area was just additional cells along the
+# edges of the existing areas, so bikeable_streets_distance_constraint
+# does not need to be added to bikeable_streets_distance_constraint.
+
+#####################################################
+# Population within half-mile radius of each point  #
+#####################################################
+r.neighbors -c input=population_raster_100x100 output=population_served method=sum size=53
+
+#########################################################
+# Number of docks within half-mile radius of each point #
+#########################################################
+g.region vector=boroughs res=100
+r.resamp.stats input=gbfs_raster method=sum output=gbfs_raster_100x100 --overwrite
+r.out.gdal input=gbfs_raster_100x100 output=./data/processed/grass_outputs/gbfs_raster_100x100.gtiff --overwrite
+
+r.neighbors -c input=gbfs_100x100 output=docks_in_range method=sum size=53 --overwrite
+r.out.gdal input=docks_in_range output=./data/processed/grass_outputs/docks_in_range.gtiff --overwrite
+
+r.mapcalc "service_area_docks_per_person = docks_in_range / population_served"
+r.out.gdal input=service_area_docks_per_person output=./data/processed/grass_outputs/service_area_docks_per_person.gtiff --overwrite
