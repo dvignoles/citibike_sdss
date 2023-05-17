@@ -9,7 +9,7 @@ mta2020="../../data/prepared/mta_2020.gpkg"
 mta2021="../../data/prepared/mta_2021.gpkg"
 mta2022="../../data/prepared/mta_2022.gpkg"
 mta2023="../../data/prepared/mta_2023.gpkg"
-output="../../data/processed/mta_allyears.gpkg"
+output="../../data/prepared/mta_allyears.gpkg"
 
 # copy stations
 echo "[GDAL/OGR]: MTA Turnstile"
