@@ -16,7 +16,7 @@ save_vector () {
 
 save_raster () {
     input_raster=$1
-    output_path="${OUTPUT_DIR}${input_raster}.gtiff"
+    output_path="${OUTPUT_DIR}${input_raster}.tif"
     r.out.gdal input=$input_raster output=$output_path --overwrite
 }
 
@@ -100,3 +100,8 @@ sum_rast_in_walk_radius () {
     fi
     r.neighbors -c input=$input_r method=sum output=$output_r size=$neighborhood_size
     }
+
+normalize_raster () {
+    input_r=$1
+    r.rescale input=$input_r to=1,100 output="${input_r}_norm"
+}
