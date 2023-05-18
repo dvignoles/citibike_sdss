@@ -349,3 +349,23 @@ EOF
 
 normalize_raster service_improvement_index
 save_raster service_improvement_index_norm
+
+r.mapcalc <<EOF
+equal_weight_suitability = \
+service_improvement_index_norm * .2 + \
+transit_index_norm * .2 + \
+expansion_index_norm * .2 + \
+profitability_index_norm * .2 + \
+safety_index_norm * .2
+EOF
+
+save_raster equal_weight_suitability
+normalize_raster equal_weight_suitability
+save_raster equal_weight_suitability_norm
+
+r.mapcalc "equal_weight_constrained = equal_weight_suitability_norm * R_constraint"
+
+
+save_raster equal_weight_constrained
+normalize_raster equal_weight_constrained
+save_raster equal_weight_constrained_norm
