@@ -1,4 +1,105 @@
 #! /usr/bin/bash
+
+######################
+# CLI Interface Start#
+######################
+
+function PrintUsage () {
+    echo "Usage ${0##*/} [weights] <output>.tif"
+    echo "      -t,  --transit   <weight> [REQUIRED]"
+    echo "      -s,  --safety    <weight> [REQUIRED]"
+    echo "      -i,  --service   <weight> [REQUIRED]"
+    echo "      -p,  --profit    <weight> [REQUIRED]"
+    echo "      -e,  --expansion <weight> [REQUIRED]"
+    exit 1
+}
+
+TRANSIT=""
+SAFETY=""
+SERVICE=""
+PROFIT=""
+EXPANSION=""
+OUTPUT_TIF=""
+
+if [ "${1}" == "" ]; then 
+    PrintUsage
+fi
+
+while [ "${1}" != "" ]
+do
+    case "${1}" in 
+    (-t|--transit)
+        shift
+        if [ "${1}" == "" ]; then PrintUsage; fi
+        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
+        then
+            TRANSIT="${1}"
+        else
+            PrintUsage
+        fi
+        shift
+    ;;
+    (-s|--safety)
+        shift
+        if [ "${1}" == "" ]; then PrintUsage; fi
+        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
+        then
+            SAFETY="${1}"
+        else
+            PrintUsage
+        fi
+        shift
+    ;;
+    (-i|--service)
+        shift
+        if [ "${1}" == "" ]; then PrintUsage; fi
+        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
+        then
+            SERVICE="${1}"
+        else
+            PrintUsage
+        fi
+        shift
+    ;;
+    (-e|--expansion)
+        shift
+        if [ "${1}" == "" ]; then PrintUsage; fi
+        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
+        then
+            EXPANSION="${1}"
+        else
+            PrintUsage
+        fi
+        shift
+    ;;
+    (-p|--profit)
+        shift
+        if [ "${1}" == "" ]; then PrintUsage; fi
+        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
+        then
+            PROFIT="${1}"
+        else
+            PrintUsage
+        fi
+        shift
+    ;;
+    (-)
+        OUTPUT_TIF="${1}"
+        shift
+    ;;
+    (*)
+        OUTPUT_TIF="${1}"
+        shift
+    ;;
+    esac
+done
+
+if [ "${OUTPUT_TIF}" == "" ]; then PrintUsage; fi
+
+######################
+# CLI Interface End  #
+######################
+
 PROJECT_DIR="."
 DATA_DIR=$PROJECT_DIR"/data/prepared/"
 OUTPUT_DIR=$PROJECT_DIR"/data/processed/grass_script_outputs/"
@@ -352,11 +453,11 @@ save_raster service_improvement_index_norm
 
 r.mapcalc <<EOF
 equal_weight_suitability = \
-service_improvement_index_norm * .2 + \
-transit_index_norm * .2 + \
-expansion_index_norm * .2 + \
-profitability_index_norm * .2 + \
-safety_index_norm * .2
+service_improvement_index_norm * $SERVICE + \
+transit_index_norm * $TRANSIT + \
+expansion_index_norm * $EXPANSION + \
+profitability_index_norm * $PROFIT + \
+safety_index_norm * $SAFETY
 EOF
 
 save_raster equal_weight_suitability
