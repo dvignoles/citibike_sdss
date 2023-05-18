@@ -365,7 +365,6 @@ save_raster equal_weight_suitability_norm
 
 r.mapcalc "equal_weight_constrained = equal_weight_suitability_norm * R_constraint"
 
-
 save_raster equal_weight_constrained
 normalize_raster equal_weight_constrained
 save_raster equal_weight_constrained_norm
