@@ -363,8 +363,12 @@ save_raster equal_weight_suitability
 normalize_raster equal_weight_suitability
 save_raster equal_weight_suitability_norm
 
+g.region raster=R_service_area_mask res=$FINE_RES
+
 r.mapcalc "equal_weight_constrained = equal_weight_suitability_norm * R_constraint"
 
+r.null equal_weight_constrained setnull=0
 save_raster equal_weight_constrained
+
 normalize_raster equal_weight_constrained
 save_raster equal_weight_constrained_norm
