@@ -10,6 +10,7 @@ EMPTY=/tmp/empty.tif
 
 # template raster tif in with appropriate origin, resolution, extent to copy
 TEMPLATE="${1}"
+OUTPUT_DIR="${2}"
 
 if [ ! -d $OUTPUT_DIR ]; then
     mkdir -p $OUTPUT_DIR
@@ -29,7 +30,7 @@ not_manhattan () {
     gdal_rasterize -b 1 -burn "0" -l nta $OPENDATA -where "borocode=3" $EMPTY
     gdal_rasterize -b 1 -burn "0" -l nta $OPENDATA -where "borocode=4" $EMPTY
     gdal_rasterize -b 1 -burn "0" -l nta $OPENDATA -where "borocode=5" $EMPTY
-    mv $EMPTY "${DATA_DIR}/userpref_not_manhattan.tif"
+    mv $EMPTY "${OUTPUT_DIR}/userpref_not_manhattan.tif"
 }
 
 prefer_bq () {
@@ -39,7 +40,7 @@ prefer_bq () {
     gdal_rasterize -b 1 -burn "50" -l nta $OPENDATA -where "borocode=3" $EMPTY
     gdal_rasterize -b 1 -burn "50" -l nta $OPENDATA -where "borocode=4" $EMPTY
     gdal_rasterize -b 1 -burn "0" -l nta $OPENDATA -where "borocode=5" $EMPTY
-    mv $EMPTY "${DATA_DIR}/userpref_prefer_bq.tif"
+    mv $EMPTY "${OUTPUT_DIR}/userpref_prefer_bq.tif"
 }
 
 not_manhattan

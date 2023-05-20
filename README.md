@@ -35,6 +35,27 @@ make sync_data_from_s3
 make sync_data_to_s3
 ```
 
+## Download / Preparing data
+
+TODO
+
+## Generate Raster Indices
+
+```
+SDSS_GRASS_DB="~/grassdata/citibike_sdss/run1"
+RASTER_OUTPUTS="./data/processed/run1"
+
+grass78 -c $SDSS_GRASS_DB --exec ./src/grass/rasterize_vectors.sh $RASTER_OUTPUTS
+
+# create user preference layers, optionally
+# these are provided for demonstration, but can but be created separately by the user
+# an existing tif must be supplied as a template
+./src/gdalogr/user_pref.sh  "$RASTER_OUPUTS/<template>.tif" $RASTER_OUTPUTS
+
+# create weighted indices
+grass78 "${SDSS_GRASS_DB}/PERMANENT" --exec ./src/grass/create_index.sh -t 2 -s 2 -i 2 -p 2 -e 2 -r 50 -u "${RASTER_OUTPUTS}/<user_pref>.tif" $RASTER_OUTPUTS
+```
+
 Project Organization
 ------------
 
