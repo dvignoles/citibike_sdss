@@ -7,6 +7,8 @@ DATA_DIR=$PROJECT_DIR"/data/prepared"
 OPENDATA="${DATA_DIR}/open_data.gpkg"
 
 EMPTY=/tmp/empty.tif
+
+# template raster tif in with appropriate origin, resolution, extent to copy
 TEMPLATE="${1}"
 
 if [ ! -d $OUTPUT_DIR ]; then
@@ -34,8 +36,8 @@ prefer_bq () {
     create_empty
     gdal_rasterize -b 1 -burn "0" -l nta $OPENDATA -where "borocode=1" $EMPTY
     gdal_rasterize -b 1 -burn "0" -l nta $OPENDATA -where "borocode=2" $EMPTY
-    gdal_rasterize -b 1 -burn "33" -l nta $OPENDATA -where "borocode=3" $EMPTY
-    gdal_rasterize -b 1 -burn "33" -l nta $OPENDATA -where "borocode=4" $EMPTY
+    gdal_rasterize -b 1 -burn "50" -l nta $OPENDATA -where "borocode=3" $EMPTY
+    gdal_rasterize -b 1 -burn "50" -l nta $OPENDATA -where "borocode=4" $EMPTY
     gdal_rasterize -b 1 -burn "0" -l nta $OPENDATA -where "borocode=5" $EMPTY
     mv $EMPTY "${DATA_DIR}/userpref_prefer_bq.tif"
 }

@@ -11,7 +11,7 @@ load_layer () {
 load_raster () {
     raster_to_import=$1
     raster_name=$2
-    r.import -o input=$raster_to_import output=$raster_name
+    r.import -o input=$raster_to_import output=$raster_name --overwrite
 }
 
 load_intermediate () {
@@ -116,5 +116,5 @@ sum_rast_in_walk_radius () {
 
 normalize_raster () {
     input_r=$1
-    r.rescale input=$input_r to=1,100 output="${input_r}_norm"
+    r.rescale input=$input_r to=1,100 output="${input_r}_norm" --overwrite
 }

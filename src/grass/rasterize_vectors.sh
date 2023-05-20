@@ -5,33 +5,19 @@
 ######################
 
 function PrintUsage () {
-    echo "Usage ${0##*/} [weights] <output_directory>"
-    echo "      -t,  --transit   <weight> [REQUIRED]"
-    echo "      -s,  --safety    <weight> [REQUIRED]"
-    echo "      -i,  --service   <weight> [REQUIRED]"
-    echo "      -p,  --profit    <weight> [REQUIRED]"
-    echo "      -e,  --expansion <weight> [REQUIRED]"
+    echo "Usage ${0##*/} [options] <output_directory>"
     echo "      -w,  --walkradi  <feet>   [OPTIONAL] DEFAULT=2640"
     echo "      -m,  --streetmax <feet>   [OPTIONAL] DEFAULT=60"
     echo "      -c,  --cbmin     <feet>   [OPTIONAL] DEFAULT=100"
-    echo "      -u,  --userpref  <tif>    [OPTIONAL]"
-    echo "      -r,  --userwght  <weight> [OPTIONAL] DEFAULT=100"
     exit 1
 }
 
-TRANSIT=""
-SAFETY=""
-SERVICE=""
-PROFIT=""
-EXPANSION=""
 OUTPUT_DIR=""
-USER_PREF=""
 
 # units are feet
 WALK_RADIUS=2640
 MAX_DIST_CB_TO_STREET=60
 MIN_DIST_CB_TO_CB=100
-USER_WEIGHT=100
 
 if [ "${1}" == "" ]; then 
     PrintUsage
@@ -40,61 +26,6 @@ fi
 while [ "${1}" != "" ]
 do
     case "${1}" in 
-    (-t|--transit)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
-        then
-            TRANSIT="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
-    (-s|--safety)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
-        then
-            SAFETY="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
-    (-i|--service)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
-        then
-            SERVICE="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
-    (-e|--expansion)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
-        then
-            EXPANSION="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
-    (-p|--profit)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
-        then
-            PROFIT="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
     (-w|--walkradi)
         shift
         if [ "${1}" == "" ]; then PrintUsage; fi
@@ -128,23 +59,6 @@ do
         fi
         shift
     ;;
-    (-u|--userpref)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        USER_PREF="${1}"
-        shift
-    ;;
-    (-r|--userwght)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+$ ]]
-        then
-            USER_WEIGHT="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
     (-)
         OUTPUT_DIR="${1}"
         shift
@@ -156,22 +70,9 @@ do
     esac
 done
 
-if [[ -z $TRANSIT ]] || [[ -z $SERVICE ]] || [[ -z $SAFETY ]] || [[ -z $EXPANSION ]] || [[ -z $PROFIT ]]; then
-	echo "Must supply all weights"
-	PrintUsage
-	exit 1
-fi
-
 if [ "${OUTPUT_DIR}" == "" ]; then 
 	OUTPUT_DIR=$(pwd)
 fi;
-
-if [ $(( $(( $TRANSIT + $SAFETY + $SERVICE + $EXPANSION + $PROFIT )) % 10 )) != 0 ]; then
-	echo "Weights must be integers adding up to multiple of 10"
-	exit 1
-fi
-
-SCENARIO="index_tra${TRANSIT}_saf${SAFETY}_ser${SERVICE}_exp${EXPANSION}_pro${PROFIT}"
 
 ######################
 # CLI Interface End  #
@@ -526,37 +427,3 @@ EOF
 
 normalize_raster service_improvement_index
 save_raster service_improvement_index_norm
-
-r.mapcalc <<EOF
-${SCENARIO} = \
-service_improvement_index_norm * 0.${SERVICE} + \
-transit_index_norm * 0.${TRANSIT} + \
-expansion_index_norm * 0.${EXPANSION} + \
-profitability_index_norm * 0.${PROFIT} + \
-safety_index_norm * 0.${SAFETY}
-EOF
-
-save_raster $SCENARIO
-normalize_raster $SCENARIO
-save_raster "${SCENARIO}_norm"
-
-r.mapcalc "${SCENARIO}_cons = ${SCENARIO}_norm * R_constraint"
-
-save_raster "${SCENARIO}_cons"
-normalize_raster "${SCENARIO}_cons"
-save_raster "${SCENARIO}_cons_norm"
-
-if [ ! -z "$USER_PREF" ]; then
-    echo "modifying with user pref"
-    PREF_NAME=$(basename ${USER_PREF} .tif)
-
-    echo $USER_PREF $USER_WEIGHT 
-    load_raster $USER_PREF user_pref_mod
-
-    r.mapcalc "${SCENARIO}_norm_${PREF_NAME} = ${SCENARIO}_norm + (${USER_WEIGHT} / 100) * user_pref_mod"
-    save_raster "${SCENARIO}_norm_${PREF_NAME}"
-
-    r.mapcalc "${SCENARIO}_cons_norm_${PREF_NAME} = ${SCENARIO}_cons_norm + (${USER_WEIGHT} / 100) * user_pref_mod"
-
-    save_raster "${SCENARIO}_cons_norm_${PREF_NAME}"
-fi

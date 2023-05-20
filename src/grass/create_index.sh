@@ -1,9 +1,5 @@
 #! /usr/bin/bash
 
-######################
-# CLI Interface Start#
-######################
-
 function PrintUsage () {
     echo "Usage ${0##*/} [weights] <output_directory>"
     echo "      -t,  --transit   <weight> [REQUIRED]"
@@ -11,10 +7,8 @@ function PrintUsage () {
     echo "      -i,  --service   <weight> [REQUIRED]"
     echo "      -p,  --profit    <weight> [REQUIRED]"
     echo "      -e,  --expansion <weight> [REQUIRED]"
-    echo "      -w,  --walkradi  <feet>   [OPTIONAL] DEFAULT=2640"
-    echo "      -m,  --streetmax <feet>   [OPTIONAL] DEFAULT=60"
-    echo "      -c,  --cbmin     <feet>   [OPTIONAL] DEFAULT=100"
     echo "      -u,  --userpref  <tif>    [OPTIONAL]"
+    echo "      -r,  --userwght  <weight> [OPTIONAL] DEFAULT=100"
     exit 1
 }
 
@@ -25,11 +19,7 @@ PROFIT=""
 EXPANSION=""
 OUTPUT_DIR=""
 USER_PREF=""
-
-# units are feet
-WALK_RADIUS=2640
-MAX_DIST_CB_TO_STREET=60
-MIN_DIST_CB_TO_CB=100
+USER_WEIGHT=100
 
 if [ "${1}" == "" ]; then 
     PrintUsage
@@ -93,43 +83,21 @@ do
         fi
         shift
     ;;
-    (-w|--walkradi)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+$ ]]
-        then
-            WALK_RADIUS="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
-    (-m|--streetmax)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+$ ]]
-        then
-            MAX_DIST_CB_TO_STREET="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
-    (-c|--cbmin)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+$ ]]
-        then
-            MIN_DIST_CB_TO_CB="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
     (-u|--userpref)
         shift
         if [ "${1}" == "" ]; then PrintUsage; fi
         USER_PREF="${1}"
+        shift
+    ;;
+    (-r|--userwght)
+        shift
+        if [ "${1}" == "" ]; then PrintUsage; fi
+        if [[ "${1}" =~ ^[0-9]+$ ]]
+        then
+            USER_WEIGHT="${1}"
+        else
+            PrintUsage
+        fi
         shift
     ;;
     (-)
@@ -159,9 +127,6 @@ if [ $(( $(( $TRANSIT + $SAFETY + $SERVICE + $EXPANSION + $PROFIT )) % 10 )) != 
 fi
 
 SCENARIO="index_tra${TRANSIT}_saf${SAFETY}_ser${SERVICE}_exp${EXPANSION}_pro${PROFIT}"
-SCENARIO_NORM="${SCENARIO}_norm"
-SCENARIO_CONS="${SCENARIO}_constrained"
-SCENARIO_CONS_NORM="${SCENARIO}_constrained_norm"
 
 ######################
 # CLI Interface End  #
@@ -178,14 +143,7 @@ fi
 . "${SRC_DIR}/set_grass_constants.sh"
 . "${SRC_DIR}/define_sdss_util.sh"
 
-load_intermediate service_improvement_index_norm.tif service_improvement_index_norm
-load_intermediate transit_index_norm.tif transit_index_norm
-load_intermediate expansion_index_norm.tif expansion_index_norm
-load_intermediate profitability_index_norm.tif profitability_index_norm
-load_intermediate safety_index_norm.tif safety_index_norm
-load_intermediate R_constraint.tif R_constraint
-
-INDEX_WEIGHT_EXPR=$(cat <<EOF
+r.mapcalc --overwrite <<EOF
 ${SCENARIO} = \
 service_improvement_index_norm * 0.${SERVICE} + \
 transit_index_norm * 0.${TRANSIT} + \
@@ -193,29 +151,45 @@ expansion_index_norm * 0.${EXPANSION} + \
 profitability_index_norm * 0.${PROFIT} + \
 safety_index_norm * 0.${SAFETY}
 EOF
-)
-
-r.mapcalc "${INDEX_WEIGHT_EXPR}"
 
 save_raster $SCENARIO
 normalize_raster $SCENARIO
-save_raster $SCENARIO_NORM
+save_raster "${SCENARIO}_norm"
 
-r.mapcalc "${SCENARIO_CONS} = ${SCENARIO_NORM} * R_constraint"
+r.mapcalc --overwrite "${SCENARIO}_cons = ${SCENARIO}_norm * R_constraint"
 
-save_raster $SCENARIO_CONS
-normalize_raster $SCENARIO_CONS
-save_raster $SCENARIO_CONS_NORM
+save_raster "${SCENARIO}_cons"
+normalize_raster "${SCENARIO}_cons"
+save_raster "${SCENARIO}_cons_norm"
+
+# Adjust with weighted user preference
+# adjustments to below zero are set to the floor of zero, then the final output is re-normalized
 
 if [ ! -z "$USER_PREF" ]; then
     echo "modifying with user pref"
-    PREF_NAME=$(basename ${USER_PREF} .tif)
+    PREF_NAME="$(basename ${USER_PREF} .tif)$USER_WEIGHT"
 
+    echo $USER_PREF $USER_WEIGHT 
     load_raster $USER_PREF user_pref_mod
 
-    r.mapcalc "${SCENARIO_NORM}+${PREF_NAME}} = ${SCENARIO_NORM} + user_pref_mod"
-    save_raster "${SCENARIO_NORM}+${PREF_NAME}"
+    INDEX_NORM="${SCENARIO}_norm_${PREF_NAME}"
+    INDEX_NORM_S1="${INDEX_NORM}_step1"
 
-    r.mapcalc "${SCENARIO_CONS_NORM}+${PREF_NAME} = ${SCENARIO_CONS_NORM} + user_pref_mod"
-    save_raster "${SCENARIO_CONS_NORM}+${PREF_NAME}"
+r.mapcalc --overwrite <<EOF 
+    ${INDEX_NORM_S1} = ${SCENARIO}_norm + (${USER_WEIGHT}.0 / 100.0) * user_pref_mod
+    ${INDEX_NORM} = if( ${INDEX_NORM_S1} <= 0, 0, ${INDEX_NORM_S1} )
+EOF
+    normalize_raster "${INDEX_NORM}"
+    save_raster "${INDEX_NORM}_norm"
+
+    INDEX_CONS_NORM="${SCENARIO}_cons_norm_${PREF_NAME}"
+    INDEX_CONS_NORM_S1="${INDEX_CONS_NORM}_step1"
+
+r.mapcalc --overwrite <<EOF
+    ${INDEX_CONS_NORM_S1} = ${SCENARIO}_cons_norm + (${USER_WEIGHT} / 100) * user_pref_mod
+    ${INDEX_CONS_NORM} = if ( ${INDEX_CONS_NORM_S1} <= 0, 0, ${INDEX_CONS_NORM_S1} )
+EOF
+
+    normalize_raster "${INDEX_CONS_NORM}"
+    save_raster "${INDEX_CONS_NORM}_norm"
 fi
