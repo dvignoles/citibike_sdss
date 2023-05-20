@@ -167,8 +167,8 @@ if [ ! -d "$OUTPUT_DIR" ]; then
     mkdir -p $OUTPUT_DIR
 fi
 
-. "${SRC_DIR}set_grass_constants"
-. "${SRC_DIR}define_sdss_util"
+. "${SRC_DIR}set_grass_constants.sh"
+. "${SRC_DIR}define_sdss_util.sh"
 
 ##################
 # Import vectors #
