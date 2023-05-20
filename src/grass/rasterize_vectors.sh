@@ -9,6 +9,7 @@ function PrintUsage () {
     echo "      -w,  --walkradi  <feet>   [OPTIONAL] DEFAULT=2640"
     echo "      -m,  --streetmax <feet>   [OPTIONAL] DEFAULT=60"
     echo "      -c,  --cbmin     <feet>   [OPTIONAL] DEFAULT=100"
+    echo "           --help"
     exit 1
 }
 
@@ -26,6 +27,10 @@ fi
 while [ "${1}" != "" ]
 do
     case "${1}" in 
+    (--help)
+        PrintUsage
+        shift
+    ;;
     (-w|--walkradi)
         shift
         if [ "${1}" == "" ]; then PrintUsage; fi

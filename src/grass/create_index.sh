@@ -9,6 +9,7 @@ function PrintUsage () {
     echo "      -e,  --expansion <weight> [REQUIRED]"
     echo "      -u,  --userpref  <tif>    [OPTIONAL]"
     echo "      -r,  --userwght  <weight> [OPTIONAL] DEFAULT=100"
+    echo "           --help"
     exit 1
 }
 
@@ -28,6 +29,10 @@ fi
 while [ "${1}" != "" ]
 do
     case "${1}" in 
+    (--help)
+        PrintUsage
+        shift
+    ;;
     (-t|--transit)
         shift
         if [ "${1}" == "" ]; then PrintUsage; fi
