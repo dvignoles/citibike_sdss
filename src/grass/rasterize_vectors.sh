@@ -14,6 +14,8 @@ function PrintUsage () {
     echo "      -w,  --walkradi  <feet>   [OPTIONAL] DEFAULT=2640"
     echo "      -m,  --streetmax <feet>   [OPTIONAL] DEFAULT=60"
     echo "      -c,  --cbmin     <feet>   [OPTIONAL] DEFAULT=100"
+    echo "      -u,  --userpref  <tif>    [OPTIONAL]"
+    echo "      -r,  --userwght  <weight> [OPTIONAL] DEFAULT=100"
     exit 1
 }
 
@@ -23,11 +25,13 @@ SERVICE=""
 PROFIT=""
 EXPANSION=""
 OUTPUT_DIR=""
+USER_PREF=""
 
 # units are feet
 WALK_RADIUS=2640
 MAX_DIST_CB_TO_STREET=60
 MIN_DIST_CB_TO_CB=100
+USER_WEIGHT=100
 
 if [ "${1}" == "" ]; then 
     PrintUsage
@@ -124,6 +128,23 @@ do
         fi
         shift
     ;;
+    (-u|--userpref)
+        shift
+        if [ "${1}" == "" ]; then PrintUsage; fi
+        USER_PREF="${1}"
+        shift
+    ;;
+    (-r|--userwght)
+        shift
+        if [ "${1}" == "" ]; then PrintUsage; fi
+        if [[ "${1}" =~ ^[0-9]+$ ]]
+        then
+            USER_WEIGHT="${1}"
+        else
+            PrintUsage
+        fi
+        shift
+    ;;
     (-)
         OUTPUT_DIR="${1}"
         shift
@@ -160,15 +181,15 @@ SCENARIO_CONS_NORM="${SCENARIO}_constrained_norm"
 ######################
 
 PROJECT_DIR="."
-DATA_DIR=$PROJECT_DIR"/data/prepared/"
-SRC_DIR=$PROJECT_DIR"/src/grass/"
+DATA_DIR=$PROJECT_DIR"/data/prepared"
+SRC_DIR=$PROJECT_DIR"/src/grass"
 
 if [ ! -d "$OUTPUT_DIR" ]; then
     mkdir -p $OUTPUT_DIR
 fi
 
-. "${SRC_DIR}set_grass_constants"
-. "${SRC_DIR}define_sdss_util"
+. "${SRC_DIR}/set_grass_constants.sh"
+. "${SRC_DIR}/define_sdss_util.sh"
 
 ##################
 # Import vectors #
@@ -528,3 +549,16 @@ save_raster $SCENARIO_CONS
 normalize_raster $SCENARIO_CONS
 save_raster $SCENARIO_CONS_NORM
 
+if [ ! -z "$USER_PREF" ]; then
+    echo "modifying with user pref"
+    PREF_NAME=$(basename ${USER_PREF} .tif)
+
+    echo $USER_PREF $USER_WEIGHT 
+    load_raster $USER_PREF user_pref_mod
+
+    r.mapcalc "${SCENARIO_NORM}_${PREF_NAME}} = ${SCENARIO_NORM} + (${USER_WEIGHT} / 100) * user_pref_mod"
+    save_raster "${SCENARIO_NORM}_${PREF_NAME}"
+
+    r.mapcalc "${SCENARIO_CONS_NORM}_${PREF_NAME} = ${SCENARIO_CONS_NORM} + (${USER_WEIGHT} / 100) * user_pref_mod"
+    save_raster "${SCENARIO_CONS_NORM}_${PREF_NAME}"
+fi
