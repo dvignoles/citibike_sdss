@@ -172,9 +172,6 @@ if [ $(( $(( $TRANSIT + $SAFETY + $SERVICE + $EXPANSION + $PROFIT )) % 10 )) != 
 fi
 
 SCENARIO="index_tra${TRANSIT}_saf${SAFETY}_ser${SERVICE}_exp${EXPANSION}_pro${PROFIT}"
-SCENARIO_NORM="${SCENARIO}_norm"
-SCENARIO_CONS="${SCENARIO}_constrained"
-SCENARIO_CONS_NORM="${SCENARIO}_constrained_norm"
 
 ######################
 # CLI Interface End  #
@@ -541,13 +538,13 @@ EOF
 
 save_raster $SCENARIO
 normalize_raster $SCENARIO
-save_raster $SCENARIO_NORM
+save_raster "${SCENARIO}_norm"
 
-r.mapcalc "${SCENARIO_CONS} = ${SCENARIO_NORM} * R_constraint"
+r.mapcalc "${SCENARIO}_cons = ${SCENARIO}_norm * R_constraint"
 
-save_raster $SCENARIO_CONS
-normalize_raster $SCENARIO_CONS
-save_raster $SCENARIO_CONS_NORM
+save_raster "${SCENARIO}_cons"
+normalize_raster "${SCENARIO}_cons"
+save_raster "${SCENARIO}_cons_norm"
 
 if [ ! -z "$USER_PREF" ]; then
     echo "modifying with user pref"
@@ -556,9 +553,10 @@ if [ ! -z "$USER_PREF" ]; then
     echo $USER_PREF $USER_WEIGHT 
     load_raster $USER_PREF user_pref_mod
 
-    r.mapcalc "${SCENARIO_NORM}_${PREF_NAME}} = ${SCENARIO_NORM} + (${USER_WEIGHT} / 100) * user_pref_mod"
-    save_raster "${SCENARIO_NORM}_${PREF_NAME}"
+    r.mapcalc "${SCENARIO}_norm_${PREF_NAME} = ${SCENARIO}_norm + (${USER_WEIGHT} / 100) * user_pref_mod"
+    save_raster "${SCENARIO}_norm_${PREF_NAME}"
 
-    r.mapcalc "${SCENARIO_CONS_NORM}_${PREF_NAME} = ${SCENARIO_CONS_NORM} + (${USER_WEIGHT} / 100) * user_pref_mod"
-    save_raster "${SCENARIO_CONS_NORM}_${PREF_NAME}"
+    r.mapcalc "${SCENARIO}_cons_norm_${PREF_NAME} = ${SCENARIO}_cons_norm + (${USER_WEIGHT} / 100) * user_pref_mod"
+
+    save_raster "${SCENARIO}_cons_norm_${PREF_NAME}"
 fi
