@@ -11,12 +11,14 @@ load_layer () {
 save_vector () {
     input_v=$1
     output_path="${OUTPUT_DIR}/${input_v}.gpkg"
+
     v.out.ogr input=$1 output=$output_path --overwrite
     }
 
 save_raster () {
     input_raster=$1
     output_path="${OUTPUT_DIR}/${input_raster}.tif"
+
     r.out.gdal input=$input_raster output=$output_path --overwrite
 }
 

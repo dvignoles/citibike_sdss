@@ -527,3 +527,4 @@ r.mapcalc "${SCENARIO_CONS} = ${SCENARIO_NORM} * R_constraint"
 save_raster $SCENARIO_CONS
 normalize_raster $SCENARIO_CONS
 save_raster $SCENARIO_CONS_NORM
+
