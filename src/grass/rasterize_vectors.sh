@@ -350,7 +350,7 @@ normalize_raster R_mta_mean_daily_exits_sum_capped
 normalize_raster R_mta_mean_daily_entries_sum_capped
 normalize_raster R_mta_complex_dist
 
-# Find inverse squared distance; implement one cell-length as floor value for
+# Find inverse distance, with one cell-length as floor value for
 # distance from MTA complex to avoid division by 0.
 r.mapcalc "R_mta_complex_dist_floor = max(R_mta_complex_dist, ${MEDIUM_RES})"
 save_raster R_mta_complex_dist_floor
