@@ -161,6 +161,9 @@ save_raster $SCENARIO
 normalize_raster $SCENARIO
 save_raster "${SCENARIO}_norm"
 
+# Set region so that constrained suitability layer is calculated at fine res
+g.region raster=R_constraint
+
 r.mapcalc --overwrite "${SCENARIO}_cons = ${SCENARIO}_norm * R_constraint"
 
 save_raster "${SCENARIO}_cons"
