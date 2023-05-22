@@ -4,8 +4,20 @@ load_layer () {
     filename=$1
     layer_to_import=$2
     new_layer_name=$3
-    full_path="${DATA_DIR}${filename}"
+    full_path="${DATA_DIR}/${filename}"
     v.import -o $full_path snap=1e-05 layer=$layer_to_import output=$new_layer_name
+}
+
+load_raster () {
+    raster_to_import=$1
+    raster_name=$2
+    r.import -o input=$raster_to_import output=$raster_name --overwrite
+}
+
+load_intermediate () {
+    raster_to_import="${OUTPUT_DIR}/$1"
+    raster_name=$2
+    r.import -o input=$raster_to_import output=$raster_name
 }
 
 save_vector () {
@@ -18,8 +30,7 @@ save_vector () {
 save_raster () {
     input_raster=$1
     output_path="${OUTPUT_DIR}/${input_raster}.tif"
-
-    r.out.gdal input=$input_raster output=$output_path --overwrite
+    r.out.gdal input=$input_raster output=$output_path --overwrite 
 }
 
 rasterize_vector () {
@@ -105,5 +116,5 @@ sum_rast_in_walk_radius () {
 
 normalize_raster () {
     input_r=$1
-    r.rescale input=$input_r to=1,100 output="${input_r}_norm"
+    r.rescale input=$input_r to=1,100 output="${input_r}_norm" --overwrite
 }

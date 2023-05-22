@@ -5,23 +5,14 @@
 ######################
 
 function PrintUsage () {
-    echo "Usage ${0##*/} [weights] <output_directory>"
-    echo "      -t,  --transit   <weight> [REQUIRED]"
-    echo "      -s,  --safety    <weight> [REQUIRED]"
-    echo "      -i,  --service   <weight> [REQUIRED]"
-    echo "      -p,  --profit    <weight> [REQUIRED]"
-    echo "      -e,  --expansion <weight> [REQUIRED]"
+    echo "Usage ${0##*/} [options] <output_directory>"
     echo "      -w,  --walkradi  <feet>   [OPTIONAL] DEFAULT=2640"
     echo "      -m,  --streetmax <feet>   [OPTIONAL] DEFAULT=60"
     echo "      -c,  --cbmin     <feet>   [OPTIONAL] DEFAULT=100"
+    echo "           --help"
     exit 1
 }
 
-TRANSIT=""
-SAFETY=""
-SERVICE=""
-PROFIT=""
-EXPANSION=""
 OUTPUT_DIR=""
 
 # units are feet
@@ -36,59 +27,8 @@ fi
 while [ "${1}" != "" ]
 do
     case "${1}" in 
-    (-t|--transit)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
-        then
-            TRANSIT="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
-    (-s|--safety)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
-        then
-            SAFETY="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
-    (-i|--service)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
-        then
-            SERVICE="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
-    (-e|--expansion)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
-        then
-            EXPANSION="${1}"
-        else
-            PrintUsage
-        fi
-        shift
-    ;;
-    (-p|--profit)
-        shift
-        if [ "${1}" == "" ]; then PrintUsage; fi
-        if [[ "${1}" =~ ^[0-9]+(\.[0-9]+)?$ ]]
-        then
-            PROFIT="${1}"
-        else
-            PrintUsage
-        fi
+    (--help)
+        PrintUsage
         shift
     ;;
     (-w|--walkradi)
@@ -135,40 +75,24 @@ do
     esac
 done
 
-if [[ -z $TRANSIT ]] || [[ -z $SERVICE ]] || [[ -z $SAFETY ]] || [[ -z $EXPANSION ]] || [[ -z $PROFIT ]]; then
-	echo "Must supply all weights"
-	PrintUsage
-	exit 1
-fi
-
 if [ "${OUTPUT_DIR}" == "" ]; then 
 	OUTPUT_DIR=$(pwd)
 fi;
-
-if [ $(( $(( $TRANSIT + $SAFETY + $SERVICE + $EXPANSION + $PROFIT )) % 10 )) != 0 ]; then
-	echo "Weights must be integers adding up to multiple of 10"
-	exit 1
-fi
-
-SCENARIO="index_tra${TRANSIT}_saf${SAFETY}_ser${SERVICE}_exp${EXPANSION}_pro${PROFIT}"
-SCENARIO_NORM="${SCENARIO}_norm"
-SCENARIO_CONS="${SCENARIO}_constrained"
-SCENARIO_CONS_NORM="${SCENARIO}_constrained_norm"
 
 ######################
 # CLI Interface End  #
 ######################
 
 PROJECT_DIR="."
-DATA_DIR=$PROJECT_DIR"/data/prepared/"
-SRC_DIR=$PROJECT_DIR"/src/grass/"
+DATA_DIR=$PROJECT_DIR"/data/prepared"
+SRC_DIR=$PROJECT_DIR"/src/grass"
 
 if [ ! -d "$OUTPUT_DIR" ]; then
     mkdir -p $OUTPUT_DIR
 fi
 
-. "${SRC_DIR}set_grass_constants"
-. "${SRC_DIR}define_sdss_util"
+. "${SRC_DIR}/set_grass_constants.sh"
+. "${SRC_DIR}/define_sdss_util.sh"
 
 ##################
 # Import vectors #
@@ -426,7 +350,7 @@ normalize_raster R_mta_mean_daily_exits_sum_capped
 normalize_raster R_mta_mean_daily_entries_sum_capped
 normalize_raster R_mta_complex_dist
 
-# Find inverse squared distance; implement one cell-length as floor value for
+# Find inverse distance, with one cell-length as floor value for
 # distance from MTA complex to avoid division by 0.
 r.mapcalc "R_mta_complex_dist_floor = max(R_mta_complex_dist, ${MEDIUM_RES})"
 save_raster R_mta_complex_dist_floor
@@ -508,23 +432,3 @@ EOF
 
 normalize_raster service_improvement_index
 save_raster service_improvement_index_norm
-
-r.mapcalc <<EOF
-${SCENARIO} = \
-service_improvement_index_norm * 0.${SERVICE} + \
-transit_index_norm * 0.${TRANSIT} + \
-expansion_index_norm * 0.${EXPANSION} + \
-profitability_index_norm * 0.${PROFIT} + \
-safety_index_norm * 0.${SAFETY}
-EOF
-
-save_raster $SCENARIO
-normalize_raster $SCENARIO
-save_raster $SCENARIO_NORM
-
-r.mapcalc "${SCENARIO_CONS} = ${SCENARIO_NORM} * R_constraint"
-
-save_raster $SCENARIO_CONS
-normalize_raster $SCENARIO_CONS
-save_raster $SCENARIO_CONS_NORM
-
