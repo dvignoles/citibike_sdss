@@ -166,6 +166,9 @@ g.region raster=R_constraint
 
 r.mapcalc --overwrite "${SCENARIO}_cons = ${SCENARIO}_norm * R_constraint"
 
+# Remove 0 values from raster so background is excluded from percentiles
+r.null "${SCENARIO}_cons" setnull=0
+
 save_raster "${SCENARIO}_cons"
 normalize_raster "${SCENARIO}_cons"
 save_raster "${SCENARIO}_cons_norm"
