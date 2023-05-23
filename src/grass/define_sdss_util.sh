@@ -114,7 +114,13 @@ sum_rast_in_walk_radius () {
     r.neighbors -c input=$input_r method=sum output=$output_r size=$neighborhood_size
     }
 
-normalize_raster () {
+# normalize_raster () {
+#     input_r=$1
+#     r.rescale input=$input_r to=1,100 output="${input_r}_norm" --overwrite
+# }
+
+normalize_raster (){
     input_r=$1
-    r.rescale input=$input_r to=1,100 output="${input_r}_norm" --overwrite
+    r.quantile input=$input_r quantiles=100 -r --quiet |
+	r.recode --overwrite $input_r output="${input_r}_norm" rules=-
 }
